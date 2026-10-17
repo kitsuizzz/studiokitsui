@@ -6,7 +6,7 @@ import RunningHead from "./components/RunningHead";
 import AgentSwitcher from "./components/AgentSwitcher";
 import WallFrame from "./components/WallFrame";
 import Switcher from "./components/Switcher";
-import GreetingFrame, { type GuestStart } from "./components/GreetingFrame";
+import GreetingFrame from "./components/GreetingFrame";
 import SettingsPage from "./components/SettingsPage";
 import StudioView from "./components/StudioView";
 import CodePane from "./components/CodePane";
@@ -32,7 +32,6 @@ import {
   fetchAdminChallenge,
   fetchMe,
   type MeResponse,
-  guestToProvider,
   markSession,
   proveAdmin,
   providerToGuest,
@@ -203,13 +202,6 @@ function mergeSavedProviders(ws: Workspace, opened: SavedProvider[]): Workspace 
   }
   const follow = (id: string): string => renames.get(id) ?? id;
   return { ...ws, providers, agents: ws.agents.map((a) => ({ ...a, providerId: follow(a.providerId) })) };
-}
-
-/** The saved-provider list without the entry that describes `saved`. */
-function withoutProvider(list: SavedProvider[], saved: SavedProvider): SavedProvider[] {
-  return list.filter(
-    (p) => !((saved.id && p.id === saved.id) || (p.name === saved.name && p.baseUrl === saved.baseUrl))
-  );
 }
 
 /** The guest's in-session providers as saved entries — what the first sign-in
@@ -1354,36 +1346,6 @@ export default function App() {
     else newChat();
   }, [loaded, accountState, guest, platform, activeId, activeStudioId, newChat, openConversation, conversations]);
 
-  /** Provider setup (guest onboarding, or a signed-in user re-configuring): Chat Kitsui rides the provider and model chosen here. A signed-in account persists the provider in its profile; a guest's setup lives in this tab only. */
-  const startGuest = (cfg: GuestStart) => {
-    const signedIn = accountState === "user";
-    // Only a genuine guest is held on the greeting's ready screen after this (the flag suppresses the auto-route); a signed-in user goes to the conversation instead.
-    if (!signedIn) onboardedThisSessionRef.current = true;
-    const provider: LlmProvider = {
-      id: uid(),
-      name: cfg.providerName,
-      baseUrl: cfg.baseUrl,
-      apiKey: cfg.apiKey,
-      models: cfg.model ? [cfg.model] : [],
-    };
-    const session: GuestSession = {
-      guest: true,
-      providerName: cfg.providerName,
-      baseUrl: cfg.baseUrl,
-      apiKey: cfg.apiKey,
-      model: cfg.model,
-      at: Date.now(),
-    };
-    if (signedIn) {
-      // The profile is the source of truth (per-account, cross-device).
-      const saved: SavedProvider = { ...guestToProvider(session), id: provider.id, models: provider.models };
-      persistProviders([...withoutProvider(profile, saved), saved]);
-    }
-    // A guest's session lives in this tab only: nothing is written to a cookie (or the stored workspace), so a reload returns to the landing page.
-    setGuest(session);
-    commitWorkspace(pointChatKitsui({ ...workspace, providers: [...workspace.providers, provider] }, provider.id, cfg.model));
-  };
-
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
     user: AccountUser,
@@ -1477,14 +1439,6 @@ export default function App() {
   const commitWorkspace = (next: Workspace) => {
     setWorkspace(next);
     persistAgents(next.agents, next.activeAgentId);
-  };
-
-  /** The greeting brain's model override (a model the onboarding flow picked): Chat Kitsui's model. */
-  const changeModel = (model: string) => {
-    const chat = workspace.agents.find((a) => a.builtIn);
-    if (!chat) return;
-    commitWorkspace(pointChatKitsui(workspace, chat.providerId, model));
-    setGuest((g) => (g ? { ...g, model, at: Date.now() } : g));
   };
 
   /** The agent picker: this conversation's agent, or the default agent when no conversation is open. */
@@ -3192,15 +3146,11 @@ export default function App() {
             </main>
           ) : accountState === "guest" || (accountState === "user" && (guest == null || onboardedThisSessionRef.current)) ? (
             <GreetingFrame
-              onStart={startGuest}
-              onModelChange={changeModel}
-              guest={guest}
-              platform={platform}
               canStart={guestCanStart}
               onNewSession={() => newChat()}
-              onFirstMessage={(t) => void send(t, [])}
-              source={effectiveSource("greeting", appOverrides)}
               onOpenAuth={(mode) => setAuthMode(mode)}
+              onOpenSettings={() => setShowSettings(true)}
+              source={effectiveSource("greeting", appOverrides)}
               signedIn={accountState === "user"}
               composer={{
                 onSend: send,

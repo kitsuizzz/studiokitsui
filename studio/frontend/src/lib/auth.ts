@@ -278,13 +278,4 @@ export function providerToGuest(provider: SavedProvider): GuestSession {
   };
 }
 
-/** A guest-shaped session as the saved-provider shape the profile stores. */
-export function guestToProvider(session: GuestSession): SavedProvider {
-  return {
-    name: session.providerName,
-    baseUrl: session.baseUrl,
-    apiKey: session.apiKey,
-    model: session.model,
-    noKey: session.noKey === true ? true : undefined,
-  };
-}
+

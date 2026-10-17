@@ -13,26 +13,28 @@ the GPU, which dials the app and stays connected (see **Backend** and
 
 ## Chat and Studio — the app's two halves
 
-The top bar carries the switch. **Studio** is the canvas, at `/` — everything
-this README describes. **Chat** is AI Studio (chat.kitsui) at `/chat`: the
-conversation app with agents, providers, web tools and the studio builder.
+**Studio** is the canvas, at `/studio` — everything this README describes.
+**Chat** is AI Studio (chat.kitsui) at `/chat`: the conversation app with
+agents, providers, web tools and the studio builder. The two halves carry no
+cross-navigation of their own (the top bar has no switch, and the landing page
+opens only into Chat).
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
-lands on the landing page — the Chat half's welcome, where Continue as guest
-opens the chat and Create an account is one click — while an **account** always
-lands wherever it left off last time, which is the `place` record in its store:
-on the backend, so it follows the account to any device. The halves have their
-own addresses, `/chat` and `/studio` (the canvas never bounces); there is no
-switch in the top bar — the door is the navigation.
+lands on the landing page — the Chat half's welcome, where Create an account
+is one click and Continue as guest opens the chat (with no model configured
+yet it leads into Settings, where a provider is added — the welcome itself
+carries no provider form) — while an **account** always lands wherever it left
+off last time, which is the `place` record in its store: on the backend, so it
+follows the account to any device. The halves have their own addresses,
+`/chat` and `/studio` (the canvas never bounces) — the door is the navigation.
 
 They are one app on one origin and **one server**: `./run.sh` is the whole
 thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
 (FastAPI — accounts, the encrypted store, the OpenAI pass-through) **inside
 its own process**, behind a small ASGI bridge (`nn_gateway.py`), so
 `/chat/auth/*` and `/chat/v1/*` never leave the server. The Chat half is
-vendored under `studio/` — sources, the one `Chat | Studio` navigation patch,
-and the build recipe (`VITE_BASE_PATH=chat`) live in
-[studio/README.md](studio/README.md). MariaDB (accounts) and the optional
+vendored under `studio/` — sources and the build recipe (`VITE_BASE_PATH=chat`)
+live in [studio/README.md](studio/README.md). MariaDB (accounts) and the optional
 SearXNG run in Docker from the upstream AI Studio checkout; the app's `.env`
 names them (see **Settings** below). While MariaDB is down, `/` and `/chat`
 still serve, and accounts answer 503.
