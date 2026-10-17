@@ -101,21 +101,8 @@ if [ "${1:-}" = "--live" ]; then
   H=$(curl -s -m 10 localhost:8124/chat/healthz | head -c 40)
   case "$H" in *'"ok":true'*) ok;; *) bad;; esac
 
-  step "live chat account (signup -> session -> /v1)"
-  JAR=/tmp/nnstudio_live_jar.txt; rm -f $JAR
-  CRED=$(printf 'live-%s' "$(date +%s%N)" | shasum -a 256 | cut -d' ' -f1)
-  S=$(curl -s -m 10 -o /tmp/nnstudio_live_signup.json -w "%{http_code}" -c $JAR \
-      -X POST localhost:8124/chat/auth/signup -H 'Content-Type: application/json' \
-      -d "{\"credential\":\"$CRED\",\"handle\":\"live\",\"captcha\":\"XXXX.DUMMY.TOKEN.XXXX\"}")
-  G=$(curl -s -m 10 -o /dev/null -w "%{http_code}" localhost:8124/chat/v1/models)
-  P=$(curl -s -m 10 -b $JAR localhost:8124/chat/v1/models | head -c 40)
-  curl -s -m 10 -b $JAR -X POST localhost:8124/chat/auth/signout -o /dev/null
-  A=$(curl -s -m 10 -o /dev/null -w "%{http_code}" -b $JAR localhost:8124/chat/v1/models)
-  if [ "$S" = "201" ] && [ "$G" = "401" ] && [ "$A" = "401" ]; then
-    case "$P" in *'"data"'*) ok;; *) bad;; esac
-  else
-    bad; echo "    signup=$S guest=$G after-signout=$A"; tail -2 /tmp/nnstudio_live_signup.json
-  fi
+  step "live chat account (signup, store, signout)"
+  node tests/live_account_test.js >/tmp/nnstudio_live_account.log 2>&1 && ok || { bad; tail -12 /tmp/nnstudio_live_account.log; }
 
   step "live gateway suite (needs MariaDB)"
   if (cd studio/backend && ../../.venv/bin/python -m pytest -q >/tmp/nnstudio_gateway_suite.log 2>&1); then

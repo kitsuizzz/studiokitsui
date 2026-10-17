@@ -17,15 +17,17 @@ The top bar carries the switch. **Studio** is the canvas, at `/` — everything
 this README describes. **Chat** is AI Studio (chat.kitsui) at `/chat`: the
 conversation app with agents, providers, web tools and the studio builder.
 
-They are one app on one origin: nnstudio's server serves the Chat half's
-built SPA and streams its gateway through (`/chat/v1`, `/chat/auth`), so a
-single `./run.sh` is the whole thing. The Chat half is vendored under
-`studio/` — sources, the one `Chat | Studio` navigation patch, and the build
-recipe (`VITE_BASE_PATH=chat`) live in [studio/README.md](studio/README.md);
-its gateway (FastAPI + MariaDB + SearXNG, upstream's `docker-compose.yml`)
-runs on `127.0.0.1:8000`, and `NNSTUDIO_STUDIO_GATEWAY` points elsewhere. With
-the gateway down, `/chat` still serves and the chat falls back to its BYOK
-provider form — by upstream design.
+They are one app on one origin and **one server**: `./run.sh` is the whole
+thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
+(FastAPI — accounts, the encrypted store, the OpenAI pass-through) **inside
+its own process**, behind a small ASGI bridge (`nn_gateway.py`), so
+`/chat/auth/*` and `/chat/v1/*` never leave the server. The Chat half is
+vendored under `studio/` — sources, the one `Chat | Studio` navigation patch,
+and the build recipe (`VITE_BASE_PATH=chat`) live in
+[studio/README.md](studio/README.md). MariaDB (accounts) and the optional
+SearXNG run in Docker from the upstream AI Studio checkout; the app's `.env`
+names them (see **Settings** below). While MariaDB is down, `/` and `/chat`
+still serve, and accounts answer 503.
 
 ## Running the app
 
@@ -45,60 +47,65 @@ straight from `nvidia-smi`), `/api/backend` (who is connected) and
 `/api/run` (dispatch the design to the agent). It listens for agents on
 `--control-port` (8125 by default).
 
-## Accounts — guests, and what an account is for
+## Accounts — one account, both halves
 
 Everyone starts a **guest**: drawing, wiring, running and training all work
 with no account, and nothing of the session is kept on the server. An account
-is only what the server saves a canvas *for* — it carries a username and an
-optional email, sealed like everything else. Creating one always goes through
-Cloudflare's bot check (Turnstile): the browser solves the challenge, generates
-its own token — 32 random bytes, never a password, shown once — and the
-register endpoint verifies the challenge with Cloudflare before the row
-exists. The account lives in the header's top-right block (icon and name)
-throughout.
+is what the server saves a canvas *for* — and it is the same account in both
+halves: sign in once (Studio's top-right block, or Chat's account menu) and
+both are signed in. Creating one always goes through Cloudflare's bot check
+(Turnstile); the browser then mints an **access key** — `ast_` + 32 random
+bytes, shown exactly once — and that key is the login and the only key to
+your saved designs. The account lives in the header's top-right block (icon
+and name) throughout.
 
-**The server never sees the token, and cannot read what it saves.** Three
-values are derived from the token, in the browser, each under its own label:
+**The server never sees the access key, and cannot read what it saves.** Two
+values are derived from it, in the browser:
 
 | derived | goes | the server keeps |
 |---|---|---|
-| `auth` = sha256("nnstudio-auth-v1" + token) | every request (cookie / bearer) | its sha256 — a hash of a hash |
-| `name tag` = sha256("nnstudio-name-v1" + token + lower(name)) | with each save | the tag itself — keyed, so it cannot be matched to a guessed name |
-| data key = sha256("nnstudio-data-v1" + token) → AES-GCM | nothing | — |
+| credential = sha256(key) | sign-up and sign-in | its sha256 — a hash of a hash |
+| record key = HKDF-SHA256(key, salt `aistudio:e2e:v1`, info `conversations`) → AES-GCM | nothing | — |
+
+The session itself is an **HttpOnly cookie** the server sets — page scripts
+never hold it — and the derived key lives in this browser's IndexedDB as a
+non-extractable `CryptoKey`, in the cache **both halves share**: unlocking one
+unlocks the other. A localStorage hint ("a sign-in may be live") lets a cold
+boot skip the `/auth/me` round trip for guests; the server always has the last
+word. (The old `nnstudio_token` in localStorage is removed on load.)
 
 Designs are saved from the **project tabs** under the toolbar: `Ctrl/Cmd+S`
 saves the active one (a new project asks for its name first), the `+` at the
 strip's right opens **New Canvas**, **AI agent** or your **Saved Canvas**
-list — each saved
-canvas opens as its own tab, and its `×` closes it (asking first when it
-holds unsaved changes; a reload or close with unsaved tabs asks too). The last
-tab wears no `×` — there is always one tab open. **AI agent** opens a tab
-that is not a canvas: the reverse-engineering agent, spoken to (see
-**The AI agent tab** below). The canvas tabs you leave
-open come back on your next visit: the browser keeps the list, and a signed-in
-account gets it sealed and posted (`sesh_ct` in `users.db`) — so a reload, or
-another machine, lands where you left off (the AI tab is a conversation, not
-a canvas, so it is not restored).
+list — each saved canvas opens as its own tab, and its `×` closes it (asking
+first when it holds unsaved changes; a reload or close with unsaved tabs asks
+too). The last tab wears no `×` — there is always one tab open. **AI agent**
+opens a tab that is not a canvas: the reverse-engineering agent, spoken to
+(see **The AI agent tab** below). The canvas tabs you leave open come back on
+your next visit — the browser keeps that list (`nnstudio_session`) — and the
+canvases themselves live in the account's encrypted store, so another device
+that signs in and unlocks gets the same designs (the AI tab is a conversation,
+not a canvas, so it is not restored).
 
-Names and designs are sealed with AES-GCM *before* they are sent; `users.db`
-holds the tag, the sealed name, the sealed design, and the auth hash — no
-plaintext name, design, or credential. What stays visible is only metadata:
-that an account exists, how many designs it has, their sizes and timestamps.
-Losing the token loses the designs for good — there is no reset, server
-included. The browser remembers the token (`localStorage`) so a reload stays
-unlocked; *log out* forgets it, and a browser without it shows the account
-locked ("account 🔒") until the token is pasted again.
+A canvas is one `canvas` record in the account's **end-to-end encrypted
+store** — the same store the Chat half keeps its conversations and studios in
+(MariaDB, `e2e_records`). The payload is sealed with AES-GCM under the record
+key *and bound to the record's id* (additional data), so a canvas cannot be
+swapped into another record's slot. The server holds ciphertext and metadata
+only: that an account exists, how many records it has, their sizes and
+timestamps. Losing the access key loses the designs for good — there is no
+reset, server included. *Log out* drops the session, the device's cached key
+and the hint.
 
-Endpoints, sealed end to end: `/api/account/register` (`name_tag`, `name_ct`,
-`auth`, `challenge`, `email_ct` when given), `/api/account/login` (`auth`), `/api/account/save`
-(`name_tag`, `name_ct`, `blob`), `/api/account/canvases`,
-`/api/account/canvas?tag=…`, `/api/account/delete` (`name_tag`). Sealing needs
-WebCrypto, which browsers only expose on secure origins — `http://localhost`
-counts, https counts, a plain-http LAN address does not (the dialog says so).
+Sealing needs WebCrypto, which browsers only expose on secure origins —
+`http://localhost` counts, https counts, a plain-http LAN address does not
+(the dialog says so).
 
-A `users.db` from before the sealing is moved aside on first use
-(`users.db.pre-e2e`) and a fresh store takes its place; old accounts simply
-sign up again.
+The endpoints behind this are the Chat half's, served in-process by the
+gateway (`studio/backend/app/accounts.py`): `POST /chat/auth/signup`
+(`credential`, `handle`, `captcha`), `POST /chat/auth/signin` (`credential`),
+`POST /chat/auth/signout`, `GET /chat/auth/me`, `GET /chat/auth/config`, and
+the sealed store: `GET /chat/auth/store`, `POST /chat/auth/store/sync`.
 
 ### From another device — https with a local CA
 
@@ -129,27 +136,36 @@ If the machine's address changes, `bash tools/tls_local.sh --force` re-makes
 the server certificate — the CA, and so every device's trust, is kept
 (`--new-ca` starts a fresh authority, requiring a re-trust).
 
+The app's own settings live in the repo's `.env` (git-ignored; start from
+`.env.example`, and a real environment variable wins over the file):
+
+    DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
+                                       # the accounts database (MariaDB)
+    UPSTREAM_BASE_URL=…                # the platform model's provider
+    UPSTREAM_API_KEY=…                 # kept server-side, never sent out
+    GATEWAY_MODELS=none                # expose no platform models (BYOK only)
+    REQUIRE_SESSION=1                  # /chat/v1 belongs to signed-in accounts
+    TURNSTILE_MODE=test                # off | test | live (sign-ups only)
+    TURNSTILE_SITE_KEY=…               # the widget's site key (public)
+    TURNSTILE_SECRET_KEY=…             # its secret key (server-side)
+    COOKIE_SECURE=0                    # 1 adds Secure to the session cookie
+    SESSION_TTL_DAYS=30                # how long a session lasts
+    SEARXNG_URL=…                      # a SearXNG the server can reach (optional)
+
 Cloudflare's *test* keys are used until the environment names a real widget,
-and the dialog says so. To put a real one in place: create a widget at
+and the dialog says so. For a real robot check: create a widget at
 [dash.cloudflare.com](https://dash.cloudflare.com/) → **Turnstile** → *Add
 widget* (give it the hostname you reach the app on — `localhost` is fine),
-copy the **Site Key** and the **Secret Key**, and put them in the repo's
-`.env` — the server reads it at startup, and a real environment variable wins
-over it. Restart (`systemctl --user restart nnstudio.service`), and the dialog
-stops saying "test keys". The site key is public by design (the page hands it
-to every browser); the secret one stays on the server.
-
-    NNSTUDIO_TURNSTILE_SITE_KEY=…      # the widget's site key
-    NNSTUDIO_TURNSTILE_SECRET_KEY=…    # its secret key
-    NNSTUDIO_COOKIE_SECURE=1           # adds Secure to the session cookie (https)
-
-`NNSTUDIO_USERS_DB` moves the accounts/designs database; `users.db` next to the
-code (git-ignored) is the default.
+copy the **Site Key** and the **Secret Key** into `.env`, and set
+`TURNSTILE_MODE=live`. Restart, and the dialog stops saying "test keys". The
+site key is public by design (the page hands it to every browser); the secret
+one stays on the server.
 
 ## Tests
 
     ./tests/run.sh           # offline: JS syntax, the DOM harness, the builder, the engine, HTML
-    ./tests/run.sh --live    # + the running app and a real agent run
+    ./tests/run.sh --live    # + the running app, a real agent run, and the gateway's
+                             #   own pytest suite (needs the MariaDB container)
     # the diffusers gate needs the venv's diffusers (the reference): it builds a
     # tiny random UNet2DConditionModel, saves it, and holds the canvas to it
 
@@ -160,7 +176,6 @@ code (git-ignored) is the default.
 | `ui/index.html` | the whole app — the toolbar up top (Palette · Import · Backend — the server config's door, up top of that menu — · VRAM), the project tabs under it (Ctrl/Cmd+S saves; the + opens New Canvas / Saved Canvas; the × closes one — never the last — warning first when it is unsaved), the canvas, the right-click menus; one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
-| `nn_users.py` | accounts for saving designs: sealed names/designs, the session (which tabs were open), keyed tags, the auth hash, the Turnstile check (`users.db`, git-ignored — ciphertext only) |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |
 | `agent/nn_torch.py` | the canvas→torch engine the agent runs (fed by the app, never by this page) |
 | `agent/nn_tokenizers.py` | huggingface `tokenizer.json` fetching + metadata (stdlib until a tokenizer is loaded) |
@@ -168,10 +183,12 @@ code (git-ignored) is the default.
 | `tests/gguf_canvas_test.py` | the pure builder test, on synthetic tensors |
 | `tests/nn_torch_test.py` | the engine's offline tests (forward, ops, training, GGUF weights) |
 | `tests/diffusers_unet_test.py` | the diffusers gate: tiny random UNet2DConditionModels — plain, SDXL's `text_time`, SDXL's whole block shape — through diffusers' eager path and through `nn_engine.diffusers_unet_canvas`: stage for stage, every tensor bound |
-| `tests/nn_users_test.py` | the account store, offline: sealed rows (not one plaintext name), the bot check's answers, the .env loader, design CRUD |
+| `tests/studio_crypto_test.js` | the Studio half's account crypto, pinned to the Chat half's: the key's shape, the credential, the HKDF record key against Node's own HKDF, and the record binding (AAD) |
+| `tests/gateway_bridge_test.py` | the in-process ASGI bridge: the scope, streaming in order, a slow client losing nothing, mid-stream failures, the failed startup, and the client-hang-up cancellation |
+| `nn_gateway.py` | the bridge that runs the Chat half's FastAPI gateway inside this process (one event loop, one task per request, cancellation on hang-up) |
 | `tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
 | `tools/chat_job.py` | the AI agent tab's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
-| `studio/` | the Chat half, vendored: AI Studio's React SPA (`frontend/dist` served at `/chat`) and its FastAPI gateway (proxied, streamed, at `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
+| `studio/` | the Chat half, vendored: AI Studio's React SPA (`frontend/dist` served at `/chat`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
 | `tools/tls_local.sh` | the tiny local CA + server certificate (`.certs/`, git-ignored) for reaching the app over https from your own devices |
 | `tests/agent_test.py` | the live end-to-end: a real agent connects and a design runs (`--live`) |
 | `weights/` | where `export weights …` writes, and a place to drop pt / safetensors / gguf files for the pickers |
