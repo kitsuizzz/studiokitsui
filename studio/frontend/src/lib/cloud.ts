@@ -17,6 +17,12 @@ export interface StoreSnapshot {
   views: StoreRecord[];
   /** The conversation to reopen next visit: one record (`current`). */
   last: StoreRecord[];
+  /** The NN Studio canvases (the canvas half's records; Chat reads them to
+      see which session is bound to which canvas, and heals a lost one). */
+  canvases: StoreRecord[];
+  /** The canvas half's open tabs: the canvas pushes its own, Chat appends
+      and drops the tab of a session it links or deletes. */
+  session: StoreRecord[];
 }
 
 export interface StoreDelta {
@@ -33,7 +39,11 @@ export interface StoreSyncBody {
       the app keeps unsealed, so the door can route an arrival before a key
       is entered. */
   place?: StoreDelta;
-  /** The canvas half's open tabs (it writes this; Chat only reads its own). */
+  /** The NN Studio canvases (the canvas half owns them; Chat creates the
+      canvas a session binds to, and deletes it when the session is gone). */
+  canvases?: StoreDelta;
+  /** The canvas half's open tabs: the canvas pushes its own, Chat appends
+      and drops the tab of a session it links or deletes. */
   session?: StoreDelta;
 }
 
@@ -52,12 +62,14 @@ export async function fetchStore(): Promise<StoreSnapshot | null> {
   try {
     const res = await fetch(`${APP_BASE}/auth/store`);
     if (!res.ok) return null;
-    const data: { conversations?: StoreRecord[]; studios?: StoreRecord[]; views?: StoreRecord[]; last?: StoreRecord[] } = await res.json();
+    const data: { conversations?: StoreRecord[]; studios?: StoreRecord[]; views?: StoreRecord[]; last?: StoreRecord[]; canvases?: StoreRecord[]; session?: StoreRecord[] } = await res.json();
     return {
       conversations: Array.isArray(data.conversations) ? data.conversations : [],
       studios: Array.isArray(data.studios) ? data.studios : [],
       views: Array.isArray(data.views) ? data.views : [],
       last: Array.isArray(data.last) ? data.last : [],
+      canvases: Array.isArray(data.canvases) ? data.canvases : [],
+      session: Array.isArray(data.session) ? data.session : [],
     };
   } catch {
     return null;

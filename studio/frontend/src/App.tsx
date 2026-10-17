@@ -44,6 +44,7 @@ import {
 import { decryptJson, deriveEncKey, encryptJson, openSecret, sealSecret } from "./lib/crypto";
 import { cacheKey, dropCachedKey, getCachedKey } from "./lib/keyvault";
 import { fetchStore, savePlace, syncStore, type StoreRecord } from "./lib/cloud";
+import { linkSessionCanvas, mintCanvasId, openCanvasBlob, unlinkSessionCanvas } from "./lib/canvasLink";
 import { type ReadingSpot } from "./components/readingSpot";
 import { parseStudioBlock, splitStudioBlock, builderPrompt, builderEditPrompt, planPrompt, criticPrompt, workspaceReviewPrompt } from "./lib/studio";
 import { captureStudioSet } from "./lib/capture";
@@ -551,6 +552,12 @@ export default function App() {
     views: new Map(),
     last: new Map(),
   });
+  /** The canvas names of the linked sessions (canvasId → the canvas's title),
+      so the prompt can name the canvas without re-reading the store per send. */
+  const canvasNamesRef = useRef<Map<string, string>>(new Map());
+  /** The canvas ids whose record is known to exist (the boot heal verified it,
+      or this session created it): the Studio button only links on first use. */
+  const canvasLinkedRef = useRef<Set<string>>(new Set());
   /** Where the reader left each conversation: in memory, and (signed in) synced encrypted. */
   const viewSpotsRef = useRef<Map<number, ReadingSpot>>(new Map());
   const viewSaveRef = useRef<number | null>(null);
@@ -738,6 +745,26 @@ export default function App() {
       return;
     }
     const loadedConversations = await decryptAll<Conversation>(key, store.conversations);
+    // Heal the session↔canvas bindings before the profile loads: a linked
+    // canvas whose record the canvas side lost (or never wrote, when the link
+    // was made while the store was unreachable) is re-linked here, so a
+    // session never points into a void.
+    for (const conv of loadedConversations) {
+      if (!conv.canvasId) continue;
+      const row = store.canvases.find((r) => r.id === "canvas|" + conv.canvasId);
+      const record = row ? await openCanvasBlob(key, conv.canvasId, row.blob) : null;
+      if (record && record.session === String(conv.id)) {
+        canvasLinkedRef.current.add(conv.canvasId);
+        canvasNamesRef.current.set(conv.canvasId, record.name);
+      } else {
+        const fresh = await linkSessionCanvas(key, String(conv.id), conv.title || "Canvas", conv.canvasId);
+        if (fresh) {
+          conv.canvasId = fresh;
+          canvasLinkedRef.current.add(fresh);
+          canvasNamesRef.current.set(fresh, conv.title || "Canvas");
+        }
+      }
+    }
     lastRef.current = await decryptLast(key, store.last);
     adopt(
       loadedConversations,
@@ -1315,6 +1342,12 @@ export default function App() {
     // Reuse an existing empty conversation instead of piling up blanks.
     const blank = conversations.find((c) => c.messages.length === 0 && c.id !== streamingId);
     if (blank) {
+      // A signed-in session carries its canvas from the start; the canvas
+      // record itself is created lazily, on the first Studio click.
+      if (cloudRef.current && !blank.canvasId) {
+        const next = { ...blank, canvasId: mintCanvasId() };
+        setConversations((prev) => prev.map((c) => (c.id === blank.id ? next : c)));
+      }
       openConversation(blank.id);
       return;
     }
@@ -1328,6 +1361,9 @@ export default function App() {
         inputTokens: 0,
         outputTokens: 0,
         createdAt: Date.now(),
+        // A signed-in session is bound to a canvas from the start; the canvas
+        // record is created lazily, on the first Studio click.
+        ...(cloudRef.current ? { canvasId: mintCanvasId() } : {}),
       },
     ]);
     setWallTextVisible(true);
@@ -1337,8 +1373,10 @@ export default function App() {
 
   // A signed-in user lands back where they left: once the session is confirmed
   // and nothing is active, reopen the conversation they were last in (the
-  // encrypted `last` pointer), or start a fresh chat when there is none. Guests
-  // keep the greeting. Two guards keep a just-signed-in user in the greeting:
+  // encrypted `last` pointer), or start a fresh chat when there is none.
+  // A ?conversation= in the URL (the canvas half's "Chat →" door) outranks
+  // the pointer: it names the session the user asked for. Guests keep the
+  // greeting. Two guards keep a just-signed-in user in the greeting:
   // no guest cookie yet (they haven't set up a provider) or onboarding
   // completed this session (they're on the ready screen about to send).
   useEffect(() => {
@@ -1351,6 +1389,11 @@ export default function App() {
     if (guest == null && platform == null) return;
     if (onboardedThisSessionRef.current) return;
     if (activeId != null || activeStudioId != null) return;
+    const wanted = Number(new URLSearchParams(window.location.search).get("conversation"));
+    if (wanted && conversations.some((c) => c.id === wanted)) {
+      openConversation(wanted);
+      return;
+    }
     const last = lastRef.current;
     if (last != null && conversations.some((c) => c.id === last)) openConversation(last);
     else newSession();
@@ -1606,6 +1649,15 @@ export default function App() {
     for (const c of conversations) if (!remaining.includes(c)) viewSpotsRef.current.delete(c.id);
     scheduleViewSync();
     setConversations(remaining);
+    // The canvas a session is linked to dies with the session: drop the canvas
+    // record and its tab from the shared open-tabs record (best-effort — the
+    // canvas side heals a record lost on its side at its next boot).
+    const gone = conversations.find((c) => c.id === id);
+    if (cloudRef.current && gone?.canvasId) {
+      void unlinkSessionCanvas(cloudRef.current.key, gone.canvasId);
+      canvasNamesRef.current.delete(gone.canvasId);
+      canvasLinkedRef.current.delete(gone.canvasId);
+    }
     if (activeId === id) {
       const list = [...remaining].sort(
         (a, b) => (b.createdAt ?? b.id) - (a.createdAt ?? a.id)
@@ -1615,7 +1667,9 @@ export default function App() {
       } else {
         // The last conversation is gone: start a fresh one. `newSession` can't
         // be reused here — its closure still sees the pre-delete list and
-        // could re-adopt the just-deleted empty conversation.
+        // could re-adopt the just-deleted empty conversation. The replacement
+        // stays bare on purpose: no canvas of its own yet — its first Studio
+        // click links a fresh one.
         const freshId = idRef.current++;
         setConversations((prev) => [
           ...prev,
@@ -3018,6 +3072,48 @@ export default function App() {
       });
   }, [conversations, studios]);
 
+  // The head's "Studio" door: cross into the canvas half on this session's
+  // canvas. Guests (no store) just get the door. Signed-in users carry their
+  // session across — minting and linking the canvas on first use, and
+  // re-linking when the record was lost on the canvas side. The sync is
+  // kept alive and capped: the click navigates right after, and a slow
+  // network must not hold the door shut.
+  const goStudio = async () => {
+    if (!cloudRef.current) {
+      window.location.href = "/studio";
+      return;
+    }
+    const conv = conversations.find((c) => c.id === activeId);
+    if (!conv) return;
+    const canvasId = conv.canvasId ?? mintCanvasId();
+    if (!conv.canvasId) {
+      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, canvasId } : c)));
+    }
+    const name = conv.title || "Canvas";
+    if (!canvasLinkedRef.current.has(canvasId)) {
+      const linked = await linkSessionCanvas(cloudRef.current.key, String(conv.id), name, canvasId, {
+        keepalive: true,
+        timeoutMs: 2500,
+      });
+      if (linked) {
+        canvasLinkedRef.current.add(linked);
+        canvasNamesRef.current.set(linked, name);
+      }
+    }
+    window.location.href = "/studio?canvas=" + canvasId;
+  };
+
+  // The door itself, in the running head of an open session. A build thread
+  // is a sub-dialog of a session, not a session — no door there (its canvas,
+  // if it ever had one, belongs to the parent).
+  const studioButton = inThread ? (
+    undefined
+  ) : (
+    <button className="head-btn head-studio" type="button" onClick={() => void goStudio()}>
+      Studio
+    </button>
+  );
+
   return (
     <div className="app">
       <TopBar
@@ -3059,6 +3155,7 @@ export default function App() {
               onMenu={() => setSidebarOpen((o) => !o)}
               onBack={inThread ? () => openConversation(active.parentId ?? active.id) : undefined}
               onOpenCode={inThread ? undefined : () => setCodeApp("conversation")}
+              studioButton={studioButton}
               modelPicker={
                 !inThread && activeAgent ? (
                   <AgentSwitcher

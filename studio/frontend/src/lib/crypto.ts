@@ -82,12 +82,15 @@ export async function deriveEncKey(key: string): Promise<CryptoKey> {
   );
 }
 
-/** JSON → base64(iv ‖ AES-GCM ciphertext). A fresh random IV per record. */
-export async function encryptJson(key: CryptoKey, value: unknown): Promise<string> {
+/** JSON → base64(iv ‖ AES-GCM ciphertext). A fresh random IV per record.
+    With `aad` (the record id), the ciphertext is bound to that id — the
+    canvas half seals its records the same way, so the two halves interoperate. */
+export async function encryptJson(key: CryptoKey, value: unknown, aad?: string): Promise<string> {
   const iv = new Uint8Array(IV_BYTES);
   crypto.getRandomValues(iv);
+  const aadBytes = aad != null ? new TextEncoder().encode(aad) : undefined;
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv, additionalData: aadBytes },
     key,
     new TextEncoder().encode(JSON.stringify(value)),
   );
@@ -97,13 +100,15 @@ export async function encryptJson(key: CryptoKey, value: unknown): Promise<strin
   return bytesToBase64(out);
 }
 
-/** The inverse of encryptJson; throws on a wrong key or tampered ciphertext. */
-export async function decryptJson<T>(key: CryptoKey, blob: string): Promise<T> {
+/** The inverse of encryptJson; throws on a wrong key or tampered ciphertext.
+    Pass the same `aad` (record id) as at sealing, or the record won't open. */
+export async function decryptJson<T>(key: CryptoKey, blob: string, aad?: string): Promise<T> {
   const raw = base64ToBytes(blob);
   if (raw.length <= IV_BYTES) throw new Error("malformed record");
   const iv = raw.subarray(0, IV_BYTES);
   const ciphertext = raw.subarray(IV_BYTES);
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+  const aadBytes = aad != null ? new TextEncoder().encode(aad) : undefined;
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: aadBytes }, key, ciphertext);
   return JSON.parse(new TextDecoder().decode(plaintext)) as T;
 }
 

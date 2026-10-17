@@ -840,6 +840,13 @@ img {
   background: var(--wall-2);
 }
 
+/* The session's door to the canvas half: a text pill in the head. */
+.head-btn.head-studio {
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 /* ---------- Exhibition ---------- */
 
 .exhibition {

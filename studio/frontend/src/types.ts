@@ -117,8 +117,8 @@ export interface ChatToolDef {
 export interface WebToolEvent {
   /** The tool_call id the model sent. */
   id: string;
-  name: "web_search" | "web_fetch";
-  /** The search query or the fetched URL — the call's subject. */
+  name: "web_search" | "web_fetch" | "read_canvas";
+  /** The search query, the fetched URL, or the canvas name — the call's subject. */
   arg: string;
   status: "pending" | "allowed" | "denied" | "done" | "error";
   /** web_search: the sources the search returned (for the card's links). */
@@ -459,6 +459,10 @@ export interface Conversation {
       builder agent sees the ask, the answers and the constraints, not just the
       one-line brief. */
   context?: ChatMessage[];
+  /** The NN Studio canvas this session is bound to (the `canvas|<id>` record
+    the Studio half owns): the "Studio" button in the head opens it, and the
+    agent can read it. */
+  canvasId?: string;
 }
 
 /**
