@@ -71,6 +71,7 @@ function streamingStatus(response, opts) {
     var ev = tools[i];
     if (ev.status === "pending") return "Waiting for your approval…";
     if (ev.status === "allowed") {
+      if (ev.name === "read_canvas") return "Reading the canvas…";
       if (ev.name === "web_fetch") return "Reading " + siteOf(ev.arg) + "…";
       return "Searching for “" + clip(ev.arg, 60) + "”…";
     }
@@ -121,7 +122,8 @@ function workBlock(turn, opts) {
         for (var ti = 0; ti < response.tools.length; ti++) {
           var toolEvent = response.tools[ti];
           if (toolEvent.status === "pending" || toolEvent.status === "allowed") {
-            toolPhase = toolEvent.name === "web_fetch" ? "Fetching the page" : "Searching the web";
+            toolPhase = toolEvent.name === "web_fetch" ? "Fetching the page"
+              : toolEvent.name === "read_canvas" ? "Reading the canvas" : "Searching the web";
           }
         }
       }

@@ -95,24 +95,41 @@ export function webToolsPrompt(enabled: { search: boolean; fetch: boolean }): st
   ].join("\n");
 }
 
+/**
+ * How the agent uses the session's canvas. The canvas is read-only to the
+ * agent: read_canvas answers with a digest of it, and changes to it are
+ * described for the user, never made from here.
+ */
+function canvasPrompt(name: string): string {
+  return [
+    "The canvas: \"" + name + "\" — this session is bound to it in NN Studio.",
+    "- The read_canvas tool answers with a digest of the canvas: every box with its kind and key settings, and the wiring between them.",
+    "- Call it before answering anything about the canvas — its content is not in the conversation, and it may have changed since the last reading.",
+    "- You cannot change the canvas from chat. If the user wants an edit, say exactly what to change — which box, which setting, which wire — so they can make it in the Studio.",
+  ].join("\n");
+}
+
 export function buildAgentSystemPrompt(
   agent: Agent,
   appCode?: string,
   studios?: { title: string; id: string }[],
-  webTools?: { search: boolean; fetch: boolean }
+  webTools?: { search: boolean; fetch: boolean },
+  canvas?: { name: string } | null
 ): string {
   const parts: string[] = [];
   const prompt = agent.systemPrompt.trim();
   if (prompt) parts.push(prompt);
   parts.push(MATH_PROMPT);
-  // The built-in capabilities: the app builder's triage, the web tools' guidance
-  // and the built-in apps' source. A custom agent without them is a plain chat.
+  // The built-in capabilities: the app builder's triage, the web tools' guidance,
+  // the session's canvas and the built-in apps' source. A custom agent without
+  // them is a plain chat.
   if (agent.builtins) {
     parts.push(studioTriagePrompt(studios));
     if (webTools) {
       const web = webToolsPrompt(webTools);
       if (web) parts.push(web);
     }
+    if (canvas) parts.push(canvasPrompt(canvas.name));
     if (appCode) parts.push(appCode);
   }
   return parts.join("\n\n");

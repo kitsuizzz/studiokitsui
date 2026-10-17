@@ -44,7 +44,7 @@ import {
 import { decryptJson, deriveEncKey, encryptJson, openSecret, sealSecret } from "./lib/crypto";
 import { cacheKey, dropCachedKey, getCachedKey } from "./lib/keyvault";
 import { fetchStore, savePlace, syncStore, type StoreRecord } from "./lib/cloud";
-import { linkSessionCanvas, mintCanvasId, openCanvasBlob, unlinkSessionCanvas } from "./lib/canvasLink";
+import { linkSessionCanvas, mintCanvasId, openCanvasBlob, READ_CANVAS_TOOL, readCanvas, unlinkSessionCanvas } from "./lib/canvasLink";
 import { type ReadingSpot } from "./components/readingSpot";
 import { parseStudioBlock, splitStudioBlock, builderPrompt, builderEditPrompt, planPrompt, criticPrompt, workspaceReviewPrompt } from "./lib/studio";
 import { captureStudioSet } from "./lib/capture";
@@ -1222,22 +1222,35 @@ export default function App() {
     );
   };
 
-  /** The streamChat tool hooks for one turn, when Settings allows the tools. */
+  /** The streamChat tool hooks for one turn: the web tools when Settings allows them, the session's canvas when it is bound. */
   const toolHooksFor = (cid: number, signal: AbortSignal): ChatToolHooks | undefined => {
+    const conv = conversations.find((c) => c.id === cid);
     const defs = activeAgent?.builtins === false ? [] : webToolDefs(settings.webTools);
+    // A canvas bound to the session rides along as a tool while signed in; it
+    // answers with the Studio half's own sealed record, read fresh each call.
+    if (conv?.canvasId && cloudRef.current) defs.push(READ_CANVAS_TOOL);
     if (defs.length === 0) return undefined;
     return {
       defs,
       onCall: (call) => {
-        const name: WebToolEvent["name"] = call.name === "web_fetch" ? "web_fetch" : "web_search";
+        const name: WebToolEvent["name"] =
+          call.name === "read_canvas"
+            ? "read_canvas"
+            : call.name === "web_fetch"
+            ? "web_fetch"
+            : "web_search";
         const arg =
           call.name === "web_search"
             ? typeof call.args.query === "string"
               ? call.args.query
               : ""
-            : typeof call.args.url === "string"
+            : call.name === "web_fetch"
+            ? typeof call.args.url === "string"
               ? call.args.url
-              : "";
+              : ""
+            : conv?.canvasId
+            ? canvasNamesRef.current.get(conv.canvasId) || "the canvas"
+            : "the canvas";
         const event: WebToolEvent = { id: call.id, name, arg, status: "pending" };
         setConversations((prev) =>
           prev.map((c) => {
@@ -1251,11 +1264,22 @@ export default function App() {
         );
       },
       approve: (call) =>
-        settings.webTools.ask[call.name === "web_fetch" ? "fetch" : "search"] ? askToolConsent(call) : Promise.resolve(true),
+        call.name === "read_canvas"
+          ? Promise.resolve(true)
+          : settings.webTools.ask[call.name === "web_fetch" ? "fetch" : "search"]
+          ? askToolConsent(call)
+          : Promise.resolve(true),
       onDenied: (call) => patchTool(cid, call.id, { status: "denied" }),
       execute: async (call) => {
         patchTool(cid, call.id, { status: "allowed" });
         try {
+          if (call.name === "read_canvas") {
+            const cloud = cloudRef.current;
+            if (!cloud || !conv?.canvasId) throw new Error("this session is not bound to a canvas");
+            const content = await readCanvas(cloud.key, conv);
+            patchTool(cid, call.id, { status: "done", detail: "the canvas, as last saved" });
+            return content;
+          }
           const run = await runWebTool(call.name, call.args, signal);
           patchTool(cid, call.id, { status: "done", ...run.patch });
           return run.content;
@@ -1825,7 +1849,21 @@ export default function App() {
     setStreamingId(cid);
     setFirstTokenCid(null);
     const llm = llmFor(provider, modelId, effectiveEffort);
-    const systemPrompt = buildAgentSystemPrompt(agent, appCode || undefined, studios.map((s) => ({ title: s.title, id: s.id })), settings.webTools);
+    // The session's canvas, if the sent conversation is bound to one and the
+    // account is signed in: the prompt names it, the tool below reads it.
+    // (A conversation created on this very turn has none yet, so no part.)
+    const boundConv = conversations.find((c) => c.id === finalCid);
+    const canvasPart =
+      boundConv?.canvasId && cloudRef.current
+        ? { name: canvasNamesRef.current.get(boundConv.canvasId) || boundConv.title || "Canvas" }
+        : null;
+    const systemPrompt = buildAgentSystemPrompt(
+      agent,
+      appCode || undefined,
+      studios.map((s) => ({ title: s.title, id: s.id })),
+      settings.webTools,
+      canvasPart
+    );
 
     let reply = "";
     let studioClaimed = false;
@@ -3007,7 +3045,17 @@ export default function App() {
   // image). It grows as the conversation does.
   const nextTurnTokens = useMemo(() => {
     if (!active || !activeAgent) return 0;
-    const systemPrompt = buildAgentSystemPrompt(activeAgent, appCode || undefined, studios.map((s) => ({ title: s.title, id: s.id })));
+    const canvasPart =
+      active.canvasId && cloudRef.current
+        ? { name: canvasNamesRef.current.get(active.canvasId) || active.title || "Canvas" }
+        : null;
+    const systemPrompt = buildAgentSystemPrompt(
+      activeAgent,
+      appCode || undefined,
+      studios.map((s) => ({ title: s.title, id: s.id })),
+      undefined,
+      canvasPart
+    );
     const clean = active.messages.filter((m) => !m.error);
     const images = clean.reduce((n, m) => n + (m.images?.length ?? 0), 0);
     return (
