@@ -179,6 +179,47 @@ global.URL.revokeObjectURL = () => {};
 global.Image = class { set src(_v) { if (this.onerror) this.onerror(); } };
 global.FileReader = class { readAsDataURL() {} };
 global.requestAnimationFrame = fn => setTimeout(fn, 0);
+// a tiny IndexedDB: the account key cache is a real path in these checks, so
+// the stub upgrades first and fires callbacks after the call, like the real one
+global.indexedDB = (() => {
+  const stores = { kv: new Map(), keys: new Map() };
+  const db = {
+    objectStoreNames: { contains: (n) => n in stores },
+    close: () => {},
+    transaction: (name) => {
+      const tx = {};
+      tx.objectStore = (n) => ({
+        get: (k) => {
+          const req = { result: stores[n].get(k) };
+          setImmediate(() => { if (req.onsuccess) req.onsuccess(); });
+          return req;
+        },
+        put: (v, k) => {
+          stores[n].set(k, v);
+          setImmediate(() => { if (tx.oncomplete) tx.oncomplete(); });
+          return {};
+        },
+        delete: (k) => {
+          stores[n].delete(k);
+          setImmediate(() => { if (tx.oncomplete) tx.oncomplete(); });
+          return {};
+        },
+      });
+      return tx;
+    },
+  };
+  return {
+    open: () => {
+      const req = {};
+      setImmediate(() => {
+        req.result = db;
+        if (req.onupgradeneeded) req.onupgradeneeded();
+        if (req.onsuccess) req.onsuccess();
+      });
+      return req;
+    },
+  };
+})();
 
 // ------------------------------------------------------- load + export seam
 (0, eval)(src + `
@@ -210,14 +251,15 @@ globalThis.__t = {
   bxTabClose, bxTabAnyDirty, bxTabLoad, bxSessionNow, bxSessionPush, bxSessionMatch,
   bxTabNewAI, bxTalkOn, bxTalkSend, bxTalkRender, bxTalkSync, bxTalkTask, bxTalkCurrent,
   bxHeadRefresh,
-  bxSessionRead, bxSessionRestore, bxSeal, bxAccountOpenApply, bxSplash, BXSESSION,
-  bxAccountSync,
+  bxSessionRead, bxSessionRestore, bxAccountOpenApply, bxSplash, BXSESSION,
+  bxAccountSync, bxCanvases, bxCanvasRecords, bxKeyGet, bxKeyPut, bxKeyDrop,
   bxGGUFImport, bxGGUFImportApply, bxtVramToggle,
-  bxSecret, bxCryptoReady, bxAuthCred, bxNameTag, bxSeal, bxUnseal,
-  bxTokenRemember, bxTokenRecall, bxAccountLoad, bxtAccountToggle, bxAccountBuild,
-  bxAccountCreate, bxAccountRegister, bxAccountSignedIn, bxAccountLocked, bxAccountOut,
-  bxAccountReveal, bxAccountLogin, bxAccountUnlockForm, bxAccountSaveForm, bxAccountSave,
-  bxAccountOpenForm, bxAccountList, bxAccountOpen, bxAccountOpenApply,
+  bxCryptoReady, bxNewKey, bxHandle, bxCredential, bxDataKey, bxSealRecord, bxOpenRecord,
+  bxSessionHint, bxSessionMark, bxSessionClear,
+  bxAccountLoad, bxtAccountToggle, bxAccountBuild,
+  bxAccountCreate, bxAccountRegister, bxAccountSignedIn, bxAccountOut,
+  bxAccountReveal, bxAccountLogin, bxAccountLogout, bxAccountUnlockForm, bxAccountSaveForm, bxAccountSave,
+  bxAccountOpenForm, bxAccountList, bxAccountOpenApply,
   get BXACCT() { return BXACCT; },
   bxtBackendToggle, bxtBackendPick, get BX_BACKEND() { return BX_BACKEND; },
   bxtRunToggle, bxtRunRefresh, bxtRunSync, bxtRunEnabled, bxtRunGo, bxtRunLoad, bxFlowVerify,
@@ -4972,7 +5014,7 @@ check("the + sits right beside the last tab, and its menu drops from it", () => 
   men.offsetWidth = keep.w;
 });
 
-check("the session remembers the saved tabs, in the browser and at the server", () => {
+check("the session remembers the saved tabs, in the browser", () => {
   const store = {};                            // (an earlier check may have stubbed
   const keepLS = global.localStorage;          // localStorage: give it back after)
   global.localStorage = {
@@ -4981,21 +5023,22 @@ check("the session remembers the saved tabs, in the browser and at the server", 
     removeItem: (k) => { delete store[k]; },
   };
   const keepId = __t.bxProject().id;
-  __t.bxTabOpenSaved("alpha", { type: "canvas", version: 1, nodes: [], edges: [] });
-  const beta = __t.bxTabOpenSaved("beta", { type: "canvas", version: 1, nodes: [], edges: [] });
+  __t.bxTabOpenSaved("alpha", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-a");
+  const beta = __t.bxTabOpenSaved("beta", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-b");
   __t.bxTabNew();                              // an unsaved tab is not remembered
-  eql(__t.bxSessionNow(), { tabs: ["alpha", "beta"], active: null },
-      "only the saved tabs ride, in their order");
+  eql(__t.bxSessionNow(),
+      { tabs: [{ id: "c-a", name: "alpha" }, { id: "c-b", name: "beta" }], active: null },
+      "only the saved tabs ride, in their order, with the record they came from");
   __t.bxTabSelect(beta.id);
-  eql(__t.bxSessionNow().active, "beta", "\u2026with the one on screen");
+  eql(__t.bxSessionNow().active, "c-b", "\u2026with the one on screen");
   ok(store.nnstudio_session &&
-     JSON.parse(store.nnstudio_session).tabs.join(",") === "alpha,beta",
+     JSON.parse(store.nnstudio_session).tabs.map(x => x.name).join(",") === "alpha,beta",
      "the browser holds the session: " + store.nnstudio_session);
-  eql(__t.bxSessionRead().active, "beta", "\u2026and reads it back");
+  eql(__t.bxSessionRead().active, "c-b", "\u2026and reads it back");
   // the match keeps the session's order and drops what is gone
-  const rows = [{ name_tag: "x1" }, { name_tag: "x2" }, { name_tag: "x3" }];
-  eql(__t.bxSessionMatch({ tabs: ["beta", "gone", "alpha"] }, rows, ["beta", "x", "alpha"]),
-      [{ row: rows[0], name: "beta" }, { row: rows[2], name: "alpha" }],
+  const rows = [{ id: "c-b" }, { id: "c-x" }, { id: "c-a" }];
+  eql(__t.bxSessionMatch({ tabs: [{ id: "c-b" }, { id: "c-gone" }, { id: "c-a" }] }, rows),
+      [rows[0], rows[2]],
       "\u2026and a restore opens what still exists, in the saved order");
   // tidy: the boot tab is the one left, reloaded from its own stash
   __t.BX.projects = __t.BX.projects.filter(x => x.id === keepId);
@@ -5029,38 +5072,43 @@ check("the boot veil: only a remembered key waits behind it", () => {
 
 checkAsync("a session restore lands the saved canvases, with their content", async () => {
   // the real loop, end to end: a session and two designs, sealed for real,
-  // served by a stub — the restore takes its own fetcher, so no other check's
-  // fetch stub can land mid-flight (they run concurrently)
-  const token = "session-token-123";
+  // served by a stub — and the key coming from the shared IndexedDB cache
+  const key = __t.bxNewKey();
+  const cryptoKey = await __t.bxDataKey(key);
   const designA = { type: "canvas", version: 1,
                     nodes: [{ id: "a1", kind: "input", name: "alpha in", x: 0, y: 0, dout: 4 }],
                     edges: [] };
   const designB = { type: "canvas", version: 1,
                     nodes: [{ id: "b1", kind: "input", name: "beta in", x: 0, y: 0, dout: 6 }],
                     edges: [] };
-  const rows = [
-    { name_tag: "aa" + "0".repeat(62), name_ct: await __t.bxSeal(token, "alpha"), updated: 2 },
-    { name_tag: "bb" + "0".repeat(62), name_ct: await __t.bxSeal(token, "beta"), updated: 1 },
-  ];
-  const blobs = { ["aa" + "0".repeat(62)]: await __t.bxSeal(token, designA),
-                  ["bb" + "0".repeat(62)]: await __t.bxSeal(token, designB) };
-  const session = await __t.bxSeal(token, { tabs: ["beta", "alpha"], active: "alpha" });
-  const stub = (url) => {
-    const u = String(url);
-    const send = (obj) => Promise.resolve({ ok: true, json: () => Promise.resolve(obj) });
-    if (u.indexOf("/api/account/session") === 0) return send({ ok: true, session });
-    if (u.indexOf("/api/account/canvases") === 0) return send({ ok: true, canvases: rows });
-    if (u.indexOf("/api/account/canvas?tag=") === 0)
-      return send({ ok: true, blob: blobs[decodeURIComponent(u.split("tag=")[1])] });
-    return send({ ok: false, error: "no route " + u });
+  const record = async (id, name, design) => ({
+    id: id,
+    blob: await __t.bxSealRecord(cryptoKey, "canvas|" + id, { name: name, design: design }),
+    updatedAt: "2026-10-17T00:00:00+00:00",
+  });
+  const rows = [await record("c-alpha", "alpha", designA),
+                await record("c-beta", "beta", designB)];
+  const session = { tabs: [{ id: "c-beta", name: "beta" }, { id: "c-alpha", name: "alpha" }],
+                    active: "c-alpha" };
+  const keepLS = global.localStorage;          // serial: every other check is done
+  const store = { nnstudio_session: JSON.stringify(session) };
+  global.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+    removeItem: (k) => { delete store[k]; },
   };
-  const keepFetch = global.fetch;              // serial: every other check is done,
-  global.fetch = stub;                         // so this stub cannot be stomped
-  const keepAcct = { user: __t.BXACCT.user, token: __t.BXACCT.token, locked: __t.BXACCT.locked };
+  const keepFetch = global.fetch;
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u.indexOf("/chat/auth/store") === 0)
+      return { ok: true, status: 200, json: async () => ({ canvases: rows }) };
+    return { ok: false, status: 404, json: async () => ({ detail: "no route " + u }) };
+  };
+  const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key, locked: __t.BXACCT.locked };
   const keepRestored = __t.BXSESSION.restored;
   __t.BXSESSION.restored = false;
   __t.BXACCT.user = null;
-  __t.BXACCT.token = "";
+  __t.BXACCT.key = null;
   __t.BXACCT.locked = false;
   const keepId = __t.bxProject().id;
   const boot = __t.bxProject();                // make it read as a reload's boot tab:
@@ -5068,10 +5116,10 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
   boot.saved = false;
   boot.dirty = false;
   __t.bxTabsRender();
-  __t.bxSplash(true, "opening your canvases \u2026");   // the boot veil, as on a reload
+  __t.bxSplash(true, "opening your canvases …");   // the boot veil, as on a reload
   ok(getEl("bxsplash").hidden === false, "the veil is up while the session is on its way");
-  await __t.bxAccountSignedIn({ id: "u-session", name_ct: await __t.bxSeal(token, "tester") },
-                              token);
+  await __t.bxKeyPut("u-session", cryptoKey);  // the device's cache, as a reload finds it
+  await __t.bxAccountSignedIn({ id: "u-session", name: "tester" });
   for (let i = 0; i < 300 &&                         // the restore's own promise
        ((__t.BX.projects || []).length < 2 || getEl("bxsplash").hidden === false); i++)
     await new Promise(r => setImmediate(r));         // chain, veil and all
@@ -5092,18 +5140,21 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
   __t.bxTabSelect(alpha.id);
   ok(__t.BX.nodes.some(n => n.name === "alpha in"),
      "\u2026and back again, stashed and restored: " + __t.BX.nodes.map(n => n.name).join(","));
-  // tidy: the boot tab stepped aside (that is the feature) \u2014 land a fresh
+  // tidy: the boot tab stepped aside (that is the feature) — land a fresh
   // blank tab instead, the state a reload boots into
   __t.BX.projects = [];
   __t.BX.active = null;
   __t.bxTabNew();
   for (const n of __t.BX.nodes.slice()) __t.bxRemove(n.id);   // the summary reads 0
   __t.BXACCT.user = keepAcct.user;
-  __t.BXACCT.token = keepAcct.token;
+  __t.BXACCT.key = keepAcct.key;
   __t.BXACCT.locked = keepAcct.locked;
   __t.BXSESSION.restored = keepRestored;
+  __t.bxKeyDrop("u-session");
   if (keepFetch === undefined) delete global.fetch;
   else global.fetch = keepFetch;
+  if (keepLS === undefined) delete global.localStorage;
+  else global.localStorage = keepLS;
   __t.bxSplash(false);
 });
 
@@ -6085,7 +6136,7 @@ check("a run reports run \u2192 result and input \u2192 output", () => {
   eql(__t.BX.nodes.length, nodes0, "the canvas is left as it was found");
 });
 
-check("the account: guests by default, a bot check to sign up, sealed designs", async () => {
+checkAsync("the account: guests by default, a bot check to sign up, sealed designs", async () => {
   const nodes0 = __t.BX.nodes.length;
   const turn = () => new Promise(r => setImmediate(r));   // one event-loop turn
   const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
@@ -6093,101 +6144,121 @@ check("the account: guests by default, a bot check to sign up, sealed designs", 
     for (let i = 0; i < turns && !ok(); i++) await turn();
     return ok();
   };
-  // everyone starts a guest — nothing is saved for one
+  // everyone starts a guest — nothing is saved for one. (This check owns the
+  // state it starts from: a pristine boot, as the page itself begins.)
+  __t.BXACCT.known = false;
+  __t.BXACCT.user = null;
+  __t.BXACCT.key = null;
+  __t.BXACCT.locked = false;
+  getEl("bxuser").hidden = true;
   eql(__t.BXACCT.user, null, "the account starts empty: a guest");
   ok(getEl("bxuser").hidden,
      "the user block shows nothing until the server says who this is");
   ok(__t.BXACCT.known === false, "\u2026the frontend is not sure yet");
+  __t.BXACCT.known = false;                    // ask again, as a fresh load would
+  __t.bxAccountLoad();
   await flush();                               // the account load settles
   ok(!getEl("bxuser").hidden && getEl("bxuname").textContent === "guest",
      "\u2026then the confirmed guest appears");
   eql(__t.bxAccountSaveForm(), false, "a guest has no save dialog");
   ok(__t.bxAccountLogin() === true, "the login dialog opens");
   eql(getEl("bxmenu").querySelectorAll(".bxinp")[0].type, "password",
-      "\u2026and the token field is masked");
+      "\u2026and the access-key field is masked");
   __t.bxMenuClose();
   ok(__t.bxtAccountToggle() === true && !getEl("bxtAccountMenu").hidden,
      "the account menu opens");
   const guestItems = getEl("bxtAccountMenu").children.map(c => c.textContent);
   ok(guestItems.some(t => t.indexOf("create an account") === 0) &&
-     guestItems.some(t => t.indexOf("log in with a token") === 0) &&
+     guestItems.some(t => t.indexOf("log in with your key") === 0) &&
      !guestItems.some(t => t.indexOf("save this canvas") === 0),
      "a guest is offered an account, not saving: " + guestItems.join(" | "));
   __t.bxtDropsClose();
-  // the token the client makes: 32 random bytes, base64url, never a password
-  const tok = __t.bxSecret();
-  ok(/^[A-Za-z0-9_-]{43}$/.test(tok) && tok !== __t.bxSecret(),
-     "the browser makes its own 43-character token: " + tok.slice(0, 8) + "…");
-  // the derivations: what the server may see, and what seals the design
-  const auth = await __t.bxAuthCred(tok);
-  ok(/^[0-9a-f]{64}$/.test(auth) && auth !== tok,
-     "auth is a sha256 of the token, never the token: " + auth.slice(0, 12) + "…");
-  eql(await __t.bxNameTag(tok, " My Canvas "), await __t.bxNameTag(tok, "my canvas"),
-      "the name tag is keyed and case-blind");
-  const sealed = await __t.bxSeal(tok, { hello: "world" });
-  ok(!JSON.stringify(sealed).includes("world"), "sealing hides the plaintext");
-  eql(await __t.bxUnseal(tok, sealed), { hello: "world" }, "…the same token opens it");
-  let refused = false;
-  try { await __t.bxUnseal(tok + "x", sealed); } catch (e) { refused = true; }
-  ok(refused, "no other token can open it");
-  // creating one: the widget runs, and only sealed values leave the browser
-  const realFetch = global.fetch, realRand = crypto.getRandomValues;
+  // the access key the browser mints: ast_ + 32 random bytes, base64url
+  const realRand = crypto.getRandomValues;
   crypto.getRandomValues = (arr) => { for (let i = 0; i < arr.length; i++) arr[i] = i + 1; return arr; };
-  const made = __t.bxSecret();                 // the dialog makes exactly this token
-  let renders = 0, sent = null, hit = null;
-  const seen = new Promise(r => { hit = r; });
+  const made = __t.bxNewKey();                 // the dialog mints exactly this key
+  ok(/^ast_[A-Za-z0-9_-]{43}$/.test(made), "the browser makes its own access key: "
+     + made.slice(0, 10) + "\u2026");
+  eql(__t.bxHandle(made), made.slice(4, 10), "the handle is the key's opening");
+  // the derivations: what the server may see, and what seals the design
+  const credential = await __t.bxCredential(made);
+  ok(/^[0-9a-f]{64}$/.test(credential) && credential !== made,
+     "the credential is a sha256 of the key, never the key: " + credential.slice(0, 12) + "\u2026");
+  const cryptoKey = await __t.bxDataKey(made); // the record key: Chat's own HKDF
+  const sealed = await __t.bxSealRecord(cryptoKey, "canvas|c1", { hello: "world" });
+  ok(!String(sealed).includes("world"), "sealing hides the plaintext");
+  eql(await __t.bxOpenRecord(cryptoKey, "canvas|c1", sealed), { hello: "world" },
+      "\u2026the same key opens it");
+  let refused = false;
+  try { await __t.bxOpenRecord(await __t.bxDataKey(made + "x"), "canvas|c1", sealed); }
+  catch (e) { refused = true; }
+  ok(refused, "no other key can open it");
+  let swapped = false;
+  try { await __t.bxOpenRecord(cryptoKey, "canvas|c2", sealed); }
+  catch (e) { swapped = true; }
+  ok(swapped, "and a record cannot be swapped into another record's slot");
+  // a stub server: the real routes, in memory
+  const server = { rows: [], sent: [], user: { id: "u_1", name: made.slice(4, 10) } };
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const u = String(url), method = (opts && opts.method) || "GET";
+    let body = null;
+    try { body = opts && opts.body ? JSON.parse(opts.body) : null; } catch (e) {}
+    if (body) server.sent.push({ url: u, body: body });
+    const reply = (obj, ok = true, status = 200) =>
+      ({ ok: ok, status: status, json: async () => obj });
+    if (u === "/chat/auth/config") return reply({ captcha: true, site_key: "1x-test", session_days: 30 });
+    if (u === "/chat/auth/signup" && method === "POST") return reply({ user: server.user }, true, 201);
+    if (u === "/chat/auth/signin" && method === "POST") return reply({ user: server.user });
+    if (u === "/chat/auth/signout" && method === "POST") return reply({ ok: true });
+    if (u === "/chat/auth/me") return reply({ user: server.user });
+    if (u === "/chat/auth/store" && method === "GET") return reply({ canvases: server.rows });
+    if (u === "/chat/auth/store/sync" && method === "POST") {
+      const delta = (body && body.canvases) || {};
+      for (const up of delta.upserts || []) {
+        const i = server.rows.findIndex(r => r.id === up.id);
+        const row = { id: up.id, blob: up.blob, updatedAt: new Date().toISOString() };
+        if (i >= 0) server.rows[i] = row; else server.rows.push(row);
+      }
+      for (const id of delta.deletes || [])
+        server.rows = server.rows.filter(r => r.id !== id);
+      return reply({ ok: true });
+    }
+    return reply({ detail: "no route " + u }, false, 404);
+  };
+  // creating one: the widget runs, and only the credential leaves the browser
+  let renders = 0;
   global.turnstile = { render: (_mount, opts) => { renders++; opts.callback("cf-test"); return "w1"; },
                        reset: () => {} };
-  global.fetch = async (url, opts) => {
-    if (String(url) === "/api/account/register") {
-      sent = JSON.parse(opts.body);
-      hit();
-      return { ok: true, status: 200,
-               json: async () => ({ ok: true, user: { id: "u_1", name_ct: sent.name_ct, created: 0 } }) };
-    }
-    return { ok: true, status: 200, json: async () => ({ ok: true }) };
-  };
+  __t.BXACCT.site = "1x-test";
+  __t.BXACCT.captcha = true;                   // as /chat/auth/config reported
   __t.bxAccountCreate();
   const form = getEl("bxmenu");
   ok(!form.hidden, "the create dialog is up");
-  eql(renders, 1, "…with Cloudflare's widget rendered in it");
+  eql(renders, 1, "\u2026with Cloudflare's widget rendered in it");
   const said = Array.from(form.children[0].children).filter(c => c.textContent)
     .map(c => String(c.textContent));
-  ok(said.indexOf("username") >= 0 && said.some(t => t.indexOf("email") === 0),
-     "the form asks a username, and an optional email: " + said.join(" | "));
-  form.querySelectorAll(".bxinp")[0].value = "tester";
-  form.querySelectorAll(".bxinp")[1].value = "t@example.com";
+  ok(said.some(t => t.indexOf("access key") >= 0) &&
+     !said.some(t => t.indexOf("username") >= 0) &&
+     !said.some(t => t.indexOf("email") >= 0),
+     "the form is the bot check and nothing else: " + said.join(" | "));
   form.querySelectorAll(".chip").find(c => String(c.textContent) === "create").click();
-  await seen;
-  eql(sent.auth, await __t.bxAuthCred(made), "register carries the derived auth");
-  eql(sent.challenge, "cf-test", "…and the bot check's challenge");
-  eql(sent.name_tag, await __t.bxNameTag(made, "tester"), "…and the keyed name tag");
-  eql(await __t.bxUnseal(made, sent.name_ct), "tester",
-      "…and the sealed name, which only the token opens");
-  eql(await __t.bxUnseal(made, sent.email_ct), "t@example.com",
-      "…and the sealed email rides along");
-  ok(!JSON.stringify(sent).includes("tester") && !JSON.stringify(sent).includes(made) &&
-     !JSON.stringify(sent).includes("t@example.com"),
-     "no plaintext name or email goes out — and never the token itself");
-  ok(await until(() => getEl("bxuname").textContent === "tester"),
+  ok(await until(() => server.sent.some(s => s.url === "/chat/auth/signup")),
+     "the solved check submits the sign-up");
+  const signup = server.sent.find(s => s.url === "/chat/auth/signup");
+  eql(signup.body.credential, credential, "register carries the derived credential");
+  eql(signup.body.handle, made.slice(4, 10), "\u2026and the handle the key's opening makes");
+  eql(signup.body.captcha, "cf-test", "\u2026and the bot check's challenge");
+  ok(!JSON.stringify(signup.body).includes(made),
+     "no plaintext key goes out \u2014 and never the key itself");
+  ok(await until(() => getEl("bxuname").textContent === made.slice(4, 10)),
      "the stubbed answer lands: signed in and revealed");
-  eql(getEl("bxuname").textContent, "tester", "signed in, the header block reads the name");
-  eql(__t.BXACCT.token, made, "the token is kept in this browser");
-  eql(__t.bxTokenRecall(), made, "…remembered for the next reload");
   eql(getEl("bxmenu").querySelectorAll(".bxtok")[0].value, made,
-      "the token is shown once, in full — the login and the key");
+      "the access key is shown once, in full \u2014 the login and the key");
   __t.bxMenuClose();
-  // saving: the design travels sealed
-  let save = null, saveHit = null;
-  const saved = new Promise(r => { saveHit = r; });
-  global.fetch = async (url, opts) => {
-    if (String(url) === "/api/account/save") {
-      save = JSON.parse(opts.body);
-      saveHit();
-      return { ok: true, status: 200, json: async () => ({ ok: true, saved: { name_tag: save.name_tag } }) };
-    }
-    return { ok: true, status: 200, json: async () => ({ ok: true }) };
-  };
+  ok(__t.bxSessionHint(), "the session hint is set for both halves");
+  ok(await __t.bxKeyGet("u_1"), "the derived key is in the shared IndexedDB cache");
+  // saving: the design travels sealed, into the account's store
   __t.bxAdd("input", 40, 40, { dout: 8 });     // something worth keeping
   const tab = __t.bxProject();
   ok(tab && tab.dirty, "the edit starred the project tab");
@@ -6197,94 +6268,90 @@ check("the account: guests by default, a bot check to sign up, sealed designs", 
      "\u2026asks what to save it as");
   f2.querySelectorAll(".bxinp")[0].value = "my canvas";
   f2.querySelectorAll(".chip").find(c => String(c.textContent) === "save").click();
-  await saved;
-  await flush();                               // the sealed post's promise chain
+  ok(await until(() => server.rows.length === 1), "the sealed record lands in the store");
+  await flush();
   eql([tab.name, tab.dirty], ["my canvas", false],
      "\u2026and the tab takes the name, star gone");
-  ok(save && save.design === undefined && !JSON.stringify(save).includes("my canvas"),
+  ok(String(tab.canvas).indexOf("c_") === 0, "\u2026and the record id it was saved under");
+  const sync1 = server.sent.find(s => s.url === "/chat/auth/store/sync");
+  ok(sync1 && sync1.body.canvases.upserts.length === 1 &&
+     sync1.body.conversations === undefined,
+     "the save rides the canvases delta alone");
+  const row1 = server.rows[0];
+  ok(!String(row1.blob).includes("my canvas"),
      "saving posts ciphertext only");
-  eql(save.name_tag, await __t.bxNameTag(made, "my canvas"), "…under the keyed name tag");
-  eql(await __t.bxUnseal(made, save.name_ct), "my canvas", "…with the name sealed");
-  eql(((await __t.bxUnseal(made, save.blob)).nodes || []).length, nodes0 + 1,
-      "…and the whole design sealed");
-  // saving again is silent: the tab knows its name now
+  const opened = await __t.bxOpenRecord(cryptoKey, "canvas|" + row1.id, row1.blob);
+  eql(opened.name, "my canvas", "\u2026with the name sealed inside");
+  eql((opened.design.nodes || []).length, nodes0 + 1,
+     "\u2026and the whole design sealed");
+  // saving again is silent, and lands on the same record
   __t.bxMenuClose();
   __t.bxAdd("layer", 260, 40, {});
   ok(tab.dirty, "a further edit stars the tab again");
-  save = null;
-  const saved2 = new Promise(r => { saveHit = r; });
   __t.bxTabSave();
   ok(getEl("bxmenu").hidden, "\u2026a saved project saves with no dialog");
-  await saved2;
-  await flush();                               // the silent save's promise chain
-  eql([tab.name, tab.dirty], ["my canvas", false], "\u2026straight to the server, star cleared");
-  eql(save.name_tag, await __t.bxNameTag(made, "my canvas"),
-      "\u2026under the same name tag \u2014 a save over the name");
+  ok(await until(() => server.rows.length === 1 && server.rows[0].updatedAt &&
+                      server.rows[0].id === row1.id),
+     "\u2026under the same record \u2014 a save over the name replaces it");
   await flush();
-  __t.bxMenuClose();
-  while (__t.BX.nodes.length > nodes0) __t.bxRemove(__t.BX.nodes[__t.BX.nodes.length - 1].id);
-  // locked: the cookie says who, but without the token there is nothing to read
-  __t.bxAccountLocked(__t.BXACCT.user);
-  eql(__t.BXACCT.locked, true, "without the key the account is locked");
-  eql(getEl("bxuname").textContent, "account 🔒", "…and the header block says so");
-  eql(__t.bxAccountSaveForm(), false, "…saving waits for the unlock");
+  // locked: the session says who, but without the key there is nothing to read
+  __t.BXACCT.key = null;
+  __t.BXACCT.locked = true;
+  __t.bxAccountSync();
+  eql(getEl("bxuname").textContent, "account 🔒", "without the key the account is locked");
+  eql(__t.bxAccountSaveForm(), false, "\u2026saving waits for the unlock");
   __t.bxAccountUnlockForm();
   const f3 = getEl("bxmenu");
   eql(f3.querySelectorAll(".bxinp")[0].type, "password",
-      "\u2026and the unlock token is masked too");
-  f3.querySelectorAll(".bxinp")[0].value = "not-the-token";
+      "\u2026and the unlock key is masked too");
+  f3.querySelectorAll(".bxinp")[0].value = "ast_wrong_wrong_wrong_wrong_wrong_wrong_wrong_wrong";
   f3.querySelectorAll(".chip").find(c => String(c.textContent) === "unlock").click();
-  const hint = f3.querySelectorAll(".panehint");
-  await until(() => String(hint[hint.length - 1].textContent).length > 0);
-  ok(String(hint[hint.length - 1].textContent).indexOf("cannot open") >= 0,
-     "a wrong token cannot unlock: " + hint[hint.length - 1].textContent);
+  ok(await until(() => Array.from(f3.querySelectorAll(".panehint"))
+       .some(h => String(h.textContent).indexOf("does not open") >= 0)),
+     "a wrong key cannot unlock");
   f3.querySelectorAll(".bxinp")[0].value = made;
   f3.querySelectorAll(".chip").find(c => String(c.textContent) === "unlock").click();
-  await until(() => getEl("bxuname").textContent === "tester");
-  eql(getEl("bxuname").textContent, "tester", "the real token unlocks it");
+  ok(await until(() => getEl("bxuname").textContent === made.slice(4, 10)),
+     "the real key unlocks it");
+  ok(await __t.bxKeyGet("u_1"), "\u2026and the cache holds it again");
   __t.bxMenuClose();
-  // opening: rows carry sealed names; a click asks for the blob by its tag
+  // opening: the list is decrypted, and a click asks twice before replacing
+  const box = __t.bxAdd("output", 480, 40, {});
   __t.bxAccountOpenForm();
   const f4 = getEl("bxmenu");
-  const hints = f4.querySelectorAll(".panehint");
-  const list = f4.querySelectorAll(".bxlist")[0];
-  const tagX = "ab".repeat(32);
-  await __t.bxAccountList(list, hints[hints.length - 1],
-                          [{ name_tag: tagX, name_ct: await __t.bxSeal(made, "demo"),
-                             updated: 1791986884, bytes: 40 }]);
+  ok(await until(() => f4.querySelectorAll(".rowl").length === 1),
+     "one row per saved design");
   const rows = f4.querySelectorAll(".rowl");
-  eql(rows.length, 1, "one row per saved design");
-  eql(rows[0].querySelectorAll(".nm")[0].textContent, "demo", "…named from the sealed name");
-  let asked = "";
-  global.fetch = async (url) => {
-    asked = String(url);
-    return { ok: true, status: 200, json: async () => ({ ok: true, name_ct: null,
-             blob: await __t.bxSeal(made, { type: "canvas", version: 1, nodes: [], edges: [] }),
-             updated: 0 }) };
-  };
-  const box = __t.bxAdd("output", 480, 40, {});
+  eql(rows[0].querySelectorAll(".nm")[0].textContent, "my canvas",
+      "\u2026named from the sealed name");
+  const hints = f4.querySelectorAll(".panehint");
   rows[0].click();
-  eql(asked, "", "with work on the canvas, the first click only warns");
   ok(String(hints[hints.length - 1].textContent).indexOf("again") >= 0,
-     "…and says a second click replaces it");
+     "with work on the canvas, the first click only warns");
   rows[0].click();
-  eql(asked, "/api/account/canvas?tag=" + tagX, "the second click asks the server by tag");
-  global.fetch = realFetch;
-  __t.bxRemove(box.id);
-  const keepDoc = JSON.stringify(__t.bxExportCanvas());
-  const blob = await __t.bxSeal(made, { type: "canvas", version: 1, nodes: [], edges: [] });
-  eql(__t.bxAccountOpenApply("demo", await __t.bxUnseal(made, blob)), true,
-      "…and the sealed design opens locally");
-  eql(__t.BX.nodes.length, 0, "…the saved design is what is on the canvas now");
-  __t.bxImportJSON(keepDoc, {});
+  ok(await until(() => __t.BX.nodes.length === nodes0 + 2),
+     "the second click opens the saved design (its boxes, not the open canvas's)");
+  __t.bxMenuClose();
+  // deleting: the row leaves the store
+  __t.bxAccountOpenForm();
+  const f5 = getEl("bxmenu");
+  ok(await until(() => f5.querySelectorAll(".rowl").length === 1), "the row is back");
+  f5.querySelectorAll(".rowl")[0].querySelectorAll(".rm")[0].click();
+  ok(await until(() => server.rows.length === 0), "\u00d7 drops the record");
+  __t.bxMenuClose();
   // logging out: a guest again, and the browser forgets the key
-  __t.bxAccountOut();
+  __t.bxAccountLogout();
   eql(__t.BXACCT.user, null, "logging out is a guest again");
-  eql(getEl("bxuname").textContent, "guest", "…and the header block says so");
-  eql(__t.bxTokenRecall(), "", "…and the remembered key is gone");
+  eql(getEl("bxuname").textContent, "guest", "\u2026and the header block says so");
+  ok(!__t.bxSessionHint(), "\u2026the shared session hint is gone");
+  await flush();
+  eql(await __t.bxKeyGet("u_1"), null, "\u2026and the cached key left with it");
   __t.bxMenuClose();
   delete global.turnstile;
   crypto.getRandomValues = realRand;
+  global.fetch = realFetch;
+  while (__t.BX.nodes.length > nodes0)         // the opened design steps aside
+    __t.bxRemove(__t.BX.nodes[__t.BX.nodes.length - 1].id);
   eql(__t.BX.nodes.length, nodes0, "the canvas is left as it was found");
 });
 

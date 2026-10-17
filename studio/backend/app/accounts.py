@@ -31,9 +31,9 @@ conversation on any device. (This is the one place the server holds
 provider keys — a deliberate, opt-in exception to the "the server never
 sees API keys" rule that otherwise governs guests.)
 
-The E2E store (/auth/store, /auth/store/sync) keeps conversations and
-studios as opaque ciphertext blobs, encrypted client-side with a key
-derived from the access key. The server stores only the blobs (plus the
+The E2E store (/auth/store, /auth/store/sync) keeps conversations, studios
+and the canvas half's designs (`canvas` records) as opaque ciphertext blobs,
+encrypted client-side with a key derived from the access key. The server stores only the blobs (plus the
 account they belong to and a timestamp) and can never read them: the
 decryption key exists only in the browser that holds the access key.
 Metadata (record ids, counts, sizes, timestamps) is still visible to the
@@ -584,6 +584,10 @@ class StoreSyncBody(BaseModel):
     views: StoreDelta = Field(default_factory=StoreDelta)
     # The conversation to reopen on the next visit: one small record (`current`).
     last: StoreDelta = Field(default_factory=StoreDelta)
+    # The canvas half's saved designs: one sealed record per canvas, keyed by
+    # the client's own id. (Chat's `studios` are its AI-built apps — a
+    # different thing, and a different kind.)
+    canvases: StoreDelta = Field(default_factory=StoreDelta)
 
 
 @_router.post("/signup", status_code=201)
@@ -852,6 +856,7 @@ def get_store(request: Request):
     studios: list[dict] = []
     views: list[dict] = []
     last: list[dict] = []
+    canvases: list[dict] = []
     for kind, rec_id, blob, updated_at in rows:
         item = {"id": rec_id, "blob": blob, "updatedAt": updated_at}
         if kind == "conversation":
@@ -862,7 +867,15 @@ def get_store(request: Request):
             views.append(item)
         elif kind == "last":
             last.append(item)
-    return {"conversations": conversations, "studios": studios, "views": views, "last": last}
+        elif kind == "canvas":
+            canvases.append(item)
+    return {
+        "conversations": conversations,
+        "studios": studios,
+        "views": views,
+        "last": last,
+        "canvases": canvases,
+    }
 
 
 @_router.post("/store/sync")
@@ -882,6 +895,7 @@ def sync_store(body: StoreSyncBody, request: Request):
             ("studio", body.studios),
             ("view", body.views),
             ("last", body.last),
+            ("canvas", body.canvases),
         ):
             for rec in delta.upserts:
                 if not rec.id or not rec.blob:

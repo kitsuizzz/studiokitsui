@@ -43,6 +43,9 @@ $PY tests/chat_job_test.py >/tmp/nnstudio_chat_job.log 2>&1 && ok || { bad; tail
 step "brand (the logo, in both UIs)"
 $PY tests/brand_test.py >/tmp/nnstudio_brand.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_brand.log; }
 
+step "studio account crypto (Chat's KDF)"
+node tests/studio_crypto_test.js >/tmp/nnstudio_studio_crypto.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_studio_crypto.log; }
+
 step "gateway bridge (in-process)"
 $PY tests/gateway_bridge_test.py >/tmp/nnstudio_gateway_bridge.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_gateway_bridge.log; }
 
@@ -57,9 +60,6 @@ $PY tests/json_safe_test.py >/tmp/nnstudio_json_safe.log 2>&1 && ok || { bad; ta
 
 step "agent tasks (db + stream)"
 $PY tests/nn_tasks_test.py >/tmp/nnstudio_nn_tasks.log 2>&1 && ok || { bad; tail -20 /tmp/nnstudio_nn_tasks.log; }
-
-step "accounts (tokens + designs)"
-$PY tests/nn_users_test.py >/tmp/nnstudio_nn_users.log 2>&1 && ok || { bad; tail -20 /tmp/nnstudio_nn_users.log; }
 
 step "html balance"
 $PY - <<'PY'
@@ -85,7 +85,7 @@ PY
 [ $? -eq 0 ] && ok || bad
 
 step "py_compile"
-$PY -m py_compile nn_engine.py nn_server.py nn_gateway.py nn_arc.py nn_users.py tools/reverse_job.py tools/reverse_model.py tools/quant_bench.py tools/train_job.py tools/chat_job.py tools/backend_check.py agent/nnstudio_agent.py agent/nn_torch.py agent/nn_quant.py && ok || bad
+$PY -m py_compile nn_engine.py nn_server.py nn_gateway.py nn_arc.py tools/reverse_job.py tools/reverse_model.py tools/quant_bench.py tools/train_job.py tools/chat_job.py tools/backend_check.py agent/nnstudio_agent.py agent/nn_torch.py agent/nn_quant.py && ok || bad
 
 if [ "${1:-}" = "--live" ]; then
   step "live app"

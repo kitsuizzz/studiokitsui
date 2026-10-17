@@ -1054,6 +1054,7 @@ async def test_store_sync_roundtrip_upsert_and_delete(client):
         "studios": [],
         "views": [],
         "last": [],
+        "canvases": [],
     }
     # An upsert lands verbatim (the blob is opaque to the server).
     r = await client.post(
@@ -1391,3 +1392,39 @@ async def test_the_gateway_requires_a_session(fake, client, monkeypatch):
     r = await client.get("/v1/models")
     assert r.status_code == 200
     assert r.json() == {"data": [{"id": "nova-4o"}]}
+
+
+async def test_the_store_carries_canvases_without_touching_the_rest(client):
+    # The canvas half's designs ride the same store as `canvas` records; a
+    # sync that sends only canvases leaves conversations and studios alone.
+    key = new_key()
+    await client.post("/auth/signup", json=signup_body(key))
+    r = await client.post(
+        "/auth/store/sync",
+        json={
+            "conversations": {"upserts": [{"id": "c1", "blob": "keep-me"}], "deletes": []},
+            "canvases": {"upserts": [{"id": "cv1", "blob": "canvas-cipher"}], "deletes": []},
+        },
+    )
+    assert r.status_code == 200
+
+    # The canvas half's own save: canvases only — the conversation survives.
+    r = await client.post(
+        "/auth/store/sync",
+        json={
+            "canvases": {
+                "upserts": [{"id": "cv2", "blob": "second"}],
+                "deletes": ["cv1"],
+            }
+        },
+    )
+    assert r.status_code == 200
+
+    store = (await client.get("/auth/store")).json()
+    assert [c["id"] for c in store["conversations"]] == ["c1"]
+    assert [c["blob"] for c in store["canvases"]] == ["second"]
+
+    # And a canvas is private to its account, like everything else.
+    await client.post("/auth/signout")
+    r = await client.get("/auth/store")
+    assert r.status_code == 401

@@ -5940,6 +5940,10 @@ function bxTrainSpec(pane) {                  // Spec: the machine, its usage, a
   else if (BX.model && BX.model.fidelity === "exact" && BX.model.spec)
     pane.appendChild(mk("div", { class: "bxbhint", text: "designed from the " +
       BX.model.spec + " spec \u00b7 exact (conformance-verified)" }));
+  else if (BX.model && BX.model.fidelity === "diffusers")
+    pane.appendChild(mk("div", { class: "bxbhint", text:
+      "diffusers " + (BX.model.arc ? "researched from the repo \u00b7 " : "") +
+      "the UNet is mirrored exactly \u2014 the VAE and the text encoders stay on the Hub" }));
   else if (BX.model && BX.model.fidelity === "approximate" && BX.model.arch)
     pane.appendChild(mk("div", { class: "bxbhint", text:
       "approximate skeleton \u2014 no verified " + BX.model.arch + " spec yet" }));
@@ -8191,31 +8195,29 @@ function bxtVramToggle() {
 }
 // ---- the account: guests by default, and designs even the server can't read
 // Nothing is kept for a guest — drawing, wiring, running and training are all
-// free, but saving a design is what an account is for. Creating one always
-// goes through Cloudflare's bot check: the browser solves a Turnstile
-// challenge and the register endpoint verifies it before the row exists.
+// free, but saving a design is what an account is for. The account is Chat's
+// account: one sign-in serves both halves of the app. The browser mints an
+// access key (ast_ + 256 random bits, shown exactly once) and sends the server
+// only its SHA-256, so the server can authenticate but never decrypt. Designs
+// are sealed with an AES-GCM key derived from the access key (HKDF, byte for
+// byte the derivation the Chat half uses) and live in the account's encrypted
+// store as `canvas` records. The server holds ciphertext; without the access
+// key nobody — the server included — can read it. Lose the key and the designs
+// are gone for good.
 //
-// The token the browser makes is never sent anywhere. Three things are
-// derived from it, here in the page: an auth credential (the only value the
-// server ever sees — it keeps a hash of it), a keyed name tag (so the server
-// can hold a row per name and refuse duplicates without learning the name),
-// and an AES-GCM key that names and designs are sealed with before they
-// leave. The server stores ciphertext; without the token nobody — the server
-// included — can read it. Lose the token and the designs are gone for good.
-let BXACCT = { user: null, name: "", token: "", locked: false, site: "", test: false,
-               max: 0, known: false };         // known: the server has said who is here
+// The session itself is an HttpOnly cookie the server sets: page scripts never
+// hold it. What this page keeps is the derived key — a non-extractable
+// CryptoKey in IndexedDB, the same cache the Chat half uses, so unlocking
+// either half unlocks both — and a localStorage hint shared with the Chat half.
+let BXACCT = { user: null, name: "", key: null, locked: false, site: "", captcha: false,
+               known: false };                 // known: the server has said who is here
 let BX_TS = { queue: null, failed: false, widget: null };
+const BX_E2E = { salt: "aistudio:e2e:v1", info: "conversations", db: "aistudio" };
+const BX_KEY_PREFIX = "ast_";
+const BX_CANVAS_MAX = 24 * 1024 * 1024;        // a sealed canvas, base64 chars
 function bxCryptoReady() {
   return typeof crypto !== "undefined" && !!crypto.subtle && !!crypto.getRandomValues &&
          typeof TextEncoder === "function" && typeof TextDecoder === "function";
-}
-function bxSecret() {                          // the token the client makes
-  const bytes = new Uint8Array(32);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 function bxUtf8(s) { return new TextEncoder().encode(String(s)); }
 function bxB64(bytes) {
@@ -8235,42 +8237,100 @@ function bxHex(bytes) {
   for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, "0");
   return s;
 }
-async function bxDigest(label, text) {         // sha256("label|text") — the whole KDF
-  const out = await crypto.subtle.digest("SHA-256", bxUtf8(label + "|" + text));
-  return new Uint8Array(out);
+// the session hint, shared with the Chat half (one origin): the cookie itself
+// is HttpOnly, so this only says "a sign-in may be live" — /chat/auth/me has
+// the last word
+function bxSessionHint() {
+  try { return localStorage.getItem("nnstudio_account") === "1"; } catch (e) { return false; }
 }
-async function bxAuthCred(token) {             // what the server is allowed to see
-  return bxHex(await bxDigest("nnstudio-auth-v1", token));
+function bxSessionMark() {
+  try { localStorage.setItem("nnstudio_account", "1"); } catch (e) {}
 }
-async function bxNameTag(token, name) {        // keyed: the same name is the same tag
-  return bxHex(await bxDigest("nnstudio-name-v1",
-                              token + "|" + String(name || "").trim().toLowerCase()));
+function bxSessionClear() {
+  try { localStorage.removeItem("nnstudio_account"); } catch (e) {}
 }
-async function bxDataKey(token) {
-  return crypto.subtle.importKey("raw", await bxDigest("nnstudio-data-v1", token),
-                                 "AES-GCM", false, ["encrypt", "decrypt"]);
+function bxNewKey() {                          // the access key the browser mints
+  const bytes = new Uint8Array(32);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return BX_KEY_PREFIX + bxB64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
-async function bxSeal(token, value) {          // AES-GCM, a fresh nonce each time
-  const key = await bxDataKey(token);
+function bxHandle(key) { return String(key || "").slice(BX_KEY_PREFIX.length,
+                                                        BX_KEY_PREFIX.length + 6); }
+async function bxCredential(key) {             // what the server is allowed to see
+  return bxHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bxUtf8(key))));
+}
+async function bxDataKey(key) {                // the record key: Chat's deriveEncKey
+  const material = await crypto.subtle.importKey("raw", bxUtf8(key), "HKDF", false,
+                                                 ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "HKDF", hash: "SHA-256", salt: bxUtf8(BX_E2E.salt), info: bxUtf8(BX_E2E.info) },
+    material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function bxSealRecord(key, aad, value) { // base64(iv ‖ ct), bound to its record
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key,
-                                          bxUtf8(JSON.stringify(value)));
-  return { iv: bxB64(iv), ct: bxB64(new Uint8Array(ct)) };
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: iv, additionalData: aad ? bxUtf8(aad) : undefined },
+    key, bxUtf8(JSON.stringify(value)));
+  const out = new Uint8Array(iv.length + ct.byteLength);
+  out.set(iv, 0);
+  out.set(new Uint8Array(ct), iv.length);
+  return bxB64(out);
 }
-async function bxUnseal(token, sealed) {
-  const key = await bxDataKey(token);
-  const raw = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bxUnb64(sealed.iv) },
-                                          key, bxUnb64(sealed.ct));
-  return JSON.parse(new TextDecoder().decode(raw));
+async function bxOpenRecord(key, aad, blob) {
+  const raw = bxUnb64(blob);
+  if (raw.length <= 12) throw new Error("malformed record");
+  const pt = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: raw.subarray(0, 12),
+      additionalData: aad ? bxUtf8(aad) : undefined },
+    key, raw.subarray(12));
+  return JSON.parse(new TextDecoder().decode(pt));
 }
-function bxTokenRemember(token) {              // the key, for the next reload
-  try {
-    if (token) localStorage.setItem("nnstudio_token", token);
-    else localStorage.removeItem("nnstudio_token");
-  } catch (e) {}
+// the shared key cache: the "aistudio" IndexedDB the Chat half opens (same
+// version, same stores) — a non-extractable key, usable but never readable
+function bxKeyDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") { reject(new Error("no IndexedDB")); return; }
+    const req = indexedDB.open(BX_E2E.db, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+      if (!db.objectStoreNames.contains("keys")) db.createObjectStore("keys");
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+  });
 }
-function bxTokenRecall() {
-  try { return localStorage.getItem("nnstudio_token") || ""; } catch (e) { return ""; }
+function bxKeyGet(userId) {
+  return bxKeyDb().then(db => new Promise((resolve) => {
+    try {
+      const req = db.transaction("keys", "readonly").objectStore("keys").get(userId);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); resolve(null); };
+    } catch (e) { db.close(); resolve(null); }
+  }), () => null);
+}
+function bxKeyPut(userId, key) {
+  return bxKeyDb().then(db => new Promise((resolve) => {
+    try {
+      const tx = db.transaction("keys", "readwrite");
+      tx.objectStore("keys").put(key, userId);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); resolve(false); };
+      tx.onabort = () => { db.close(); resolve(false); };
+    } catch (e) { db.close(); resolve(false); }
+  }), () => false);
+}
+function bxKeyDrop(userId) {
+  return bxKeyDb().then(db => new Promise((resolve) => {
+    try {
+      const tx = db.transaction("keys", "readwrite");
+      tx.objectStore("keys").delete(userId);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); resolve(false); };
+      tx.onabort = () => { db.close(); resolve(false); };
+    } catch (e) { db.close(); resolve(false); }
+  }), () => false);
 }
 function bxTurnstileLoad(cb) {                 // the widget script, fetched once
   if (typeof window === "undefined") return cb(null);
@@ -8305,67 +8365,60 @@ function bxSplash(show, note) {                // the boot veil: up while the
   el.hidden = !show;
 }
 function bxAccountLoad() {                     // who is this, and what does the check need
+  try { localStorage.removeItem("nnstudio_token"); } catch (e) {}   // the old root token
   if (typeof fetch !== "function") {           // no server to ask: a guest, and that is that
     BXACCT.known = true;
     bxAccountSync();
     return;
   }
-  const remembered = bxTokenRecall();
-  fetch("/api/account").then(r => r.json()).then(d => {
-    BXACCT.known = true;                       // the server has spoken
-    if (!d || !d.ok) { bxAccountSync(); return; }
+  // the sign-up dialog's needs (the robot check and its public site key)
+  fetch("/chat/auth/config").then(r => r.json()).then(d => {
+    if (!d) return;
     BXACCT.site = d.site_key || "";
-    BXACCT.test = !!d.test_keys;
-    BXACCT.max = d.max_bytes || 0;
-    if (d.user) {
-      if (remembered) return bxAccountSignedIn(d.user, remembered);
-      bxAccountLocked(d.user);                 // signed in, but the key is not in this browser
-      return;
-    }
-    if (!remembered || !bxCryptoReady()) { bxAccountSync(); return; }
-    return bxAuthCred(remembered).then(auth =>  // the cookie went away; the token is here
-      fetch("/api/account/login", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auth }) })
-        .then(r => r.json())
-        .then(l => { if (l && l.ok && l.user) return bxAccountSignedIn(l.user, remembered); })
-        .catch(() => { bxAccountSync(); }));
-  }).catch(() => { BXACCT.known = true; bxAccountSync(); });
+    BXACCT.captcha = !!d.captcha;
+  }).catch(() => {});
+  if (!bxSessionHint()) {                      // nothing to ask about: a guest
+    BXACCT.known = true;
+    bxAccountSync();
+    return;
+  }
+  fetch("/chat/auth/me").then(r => r.json().then(d => ({ ok: r.ok, d: d })))
+    .then(({ ok, d }) => {
+      BXACCT.known = true;
+      if (!ok || !d || !d.user) {              // the hint outlived the session
+        bxSessionClear();
+        bxAccountSync();
+        return;
+      }
+      return bxAccountSignedIn(d.user);        // the key comes from the cache
+    })
+    .catch(() => { BXACCT.known = true; bxAccountSync(); });
 }
-async function bxAccountSignedIn(user, token) {
+async function bxAccountSignedIn(user) {
   BXACCT.known = true;
   BXACCT.user = user || null;
-  BXACCT.token = String(token || "");
-  BXACCT.name = "";
-  BXACCT.locked = !BXACCT.token;
-  if (BXACCT.user && BXACCT.user.name_ct && BXACCT.token) {
-    try { BXACCT.name = String(await bxUnseal(BXACCT.token, BXACCT.user.name_ct)); }
-    catch (e) { BXACCT.locked = true; BXACCT.token = ""; }   // a token for some other account
+  BXACCT.name = (user && user.name) || "";
+  BXACCT.key = null;
+  if (BXACCT.user) bxSessionMark();
+  if (BXACCT.user) {
+    try { BXACCT.key = await bxKeyGet(BXACCT.user.id); } catch (e) {}
   }
-  bxTokenRemember(BXACCT.token);
+  BXACCT.locked = !!BXACCT.user && !BXACCT.key;
   bxAccountSync();
   if (!BXSESSION.restored) {                   // the tabs come back where they
     BXSESSION.restored = true;                 // were — once per page
     bxSessionRestore().then(() => { bxSplash(false); bxSessionPush(); })
-                     .catch(() => bxSplash(false));
+                      .catch(() => bxSplash(false));
   } else {
     bxSplash(false);
   }
-}
-function bxAccountLocked(user) {
-  BXACCT.known = true;
-  BXACCT.user = user || null;
-  BXACCT.token = "";
-  BXACCT.name = "";
-  BXACCT.locked = !!BXACCT.user;
-  bxAccountSync();
 }
 function bxAccountOut() {
   BXACCT.known = true;                         // a logout is a known guest
   BXACCT.user = null;
   BXACCT.name = "";
-  BXACCT.token = "";
+  BXACCT.key = null;
   BXACCT.locked = false;
-  bxTokenRemember("");
   bxAccountSync();
 }
 function bxAccountSync() {
@@ -8385,7 +8438,7 @@ function bxAccountSync() {
   if (BXACCT.locked) {
     bxSplash(false);                           // locked: nothing can be unsealed
     nm.textContent = "account 🔒";
-    b.title = "signed in — paste your token once so this browser can read your designs";
+    b.title = "signed in — paste your access key once so this browser can read your designs";
     b.className = "bxuserbtn locked";
     return;
   }
@@ -8414,17 +8467,17 @@ function bxAccountBuild() {
   };
   if (!BXACCT.user) {
     item("a guest — nothing is saved yet", "", null, true);
-    item("create an account …", "one Cloudflare bot check, then a token of your own",
+    item("create an account …", "one Cloudflare bot check, then a key of your own",
          () => { bxtDropsClose(); bxAccountCreate(); });
-    item("log in with a token …", "the token an account showed when it was created",
+    item("log in with your key …", "the access key an account showed when it was created",
          () => { bxtDropsClose(); bxAccountLogin(); });
     return;
   }
   if (BXACCT.locked) {
     item("signed in — this browser holds no key", "", null, true);
-    item("unlock with your token …", "the token is the key to your saved designs",
+    item("unlock with your access key …", "the key is what opens your saved designs",
          () => { bxtDropsClose(); bxAccountUnlockForm(); });
-    item("log out", "this browser forgets the cookie and any key it held",
+    item("log out", "this browser forgets the session and any key it held",
          () => { bxtDropsClose(); bxAccountLogout(); });
     return;
   }
@@ -8433,13 +8486,14 @@ function bxAccountBuild() {
        null, true);
   item("open · the + beside the tabs", "saved canvases, each in its own tab",
        null, true);
-  item("log out", "this browser forgets the cookie and the token it held",
+  item("log out", "this browser forgets the session and the key it held",
        () => { bxtDropsClose(); bxAccountLogout(); });
 }
 function bxAccountLogout() {
   if (typeof fetch === "function")
-    fetch("/api/account/logout", { method: "POST",
-      headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+    fetch("/chat/auth/signout", { method: "POST" }).catch(() => {});
+  if (BXACCT.user && BXACCT.user.id) bxKeyDrop(BXACCT.user.id);
+  bxSessionClear();
   bxAccountOut();
 }
 function bxAccountForm() {                     // #bxmenu, centered like the import
@@ -8473,18 +8527,10 @@ function bxAccountRow(wrap, goText, goFn) {
   return go;
 }
 function bxAccountNameField(defaultName) {
-  const lab = mk("label", { text: "username" });
+  const lab = mk("label", { text: "name" });
   const inp = mk("input", { class: "bxinp", type: "text", autocomplete: "off",
-                            placeholder: "your username" });
+                            placeholder: "a name for this canvas" });
   inp.value = defaultName || "";
-  lab.appendChild(inp);
-  return { lab, inp };
-}
-function bxAccountEmailField(defaultEmail) {
-  const lab = mk("label", { text: "email — optional" });
-  const inp = mk("input", { class: "bxinp", type: "text", autocomplete: "off",
-                            placeholder: "you@example.com" });
-  inp.value = defaultEmail || "";
   lab.appendChild(inp);
   return { lab, inp };
 }
@@ -8492,27 +8538,22 @@ function bxAccountCreate() {
   const wrap = bxAccountForm();
   if (!wrap) return false;
   wrap.appendChild(mk("div", { class: "mhead", text: "create an account" }));
-  const { lab, inp } = bxAccountNameField("");
-  wrap.appendChild(lab);
-  const { lab: mlab, inp: minp } = bxAccountEmailField("");
-  wrap.appendChild(mlab);
-  const status = mk("div", { class: "panehint", text: "loading the bot check …" });
-  wrap.appendChild(status);
+  wrap.appendChild(mk("div", { class: "panehint",
+    text: "one account for both halves of the app — the Studio and the Chat. " +
+          "It issues an access key, shown exactly once: it is the login and the " +
+          "only key to your saved designs." }));
+  const status = mk("div", { class: "panehint", text: "" });
   const mount = mk("div", { class: "bxcf" });
+  wrap.appendChild(status);
   wrap.appendChild(mount);
-  const token = bxSecret();                    // made here, in the browser
   let challenge = "";
   const go = bxAccountRow(wrap, "create", () => submit());
   const submit = () => {
-    const name = String(inp.value || "").trim();
-    if (!name) { status.textContent = "the account needs a username"; return; }
-    const email = String(minp.value || "").trim();
-    if (email && (email.indexOf("@") < 1 || email.length > 200)) {
-      status.textContent = "that does not look like an email — fix it, or leave it out";
+    if (BXACCT.captcha && BXACCT.site && !challenge) {
+      status.textContent = "the bot check has not passed yet";
       return;
     }
-    if (!challenge) { status.textContent = "the bot check has not passed yet"; return; }
-    bxAccountRegister(name, email, token, challenge, status, go);
+    bxAccountRegister(challenge, status, go);
   };
   const start = (ts) => {
     if (!ts) { status.textContent = "the bot check could not load — an account needs it"; return; }
@@ -8521,8 +8562,7 @@ function bxAccountCreate() {
         sitekey: BXACCT.site,
         callback: (cf) => {
           challenge = cf;
-          status.textContent = BXACCT.test ? "bot check passed (Cloudflare's test keys)"
-                                           : "bot check passed";
+          status.textContent = "bot check passed";
           bxAccountPlace();
         },
         "error-callback": () => {
@@ -8534,9 +8574,7 @@ function bxAccountCreate() {
           status.textContent = "the bot check expired — it will rerun";
         },
       });
-      status.textContent = BXACCT.test
-        ? "Cloudflare's test keys — set NNSTUDIO_TURNSTILE_* for the real check"
-        : "waiting for the bot check …";
+      status.textContent = "waiting for the bot check …";
     } catch (e) {
       status.textContent = "the bot check could not start";
     }
@@ -8548,28 +8586,30 @@ function bxAccountCreate() {
                          "http://localhost or https";
     return true;
   }
-  if (typeof window !== "undefined" && window.turnstile) start(window.turnstile);
-  else bxTurnstileLoad(start);
+  if (BXACCT.captcha && BXACCT.site) {
+    if (typeof window !== "undefined" && window.turnstile) start(window.turnstile);
+    else bxTurnstileLoad(start);
+  } else {
+    status.textContent = "no bot check on this deployment";
+  }
   return true;
 }
-async function bxAccountRegister(name, email, token, challenge, status, go) {
+async function bxAccountRegister(challenge, status, go) {
   if (typeof fetch !== "function") return false;
   if (!bxCryptoReady()) { if (status) status.textContent = "this browser cannot seal"; return false; }
   if (go) go.textContent = "creating …";
+  const key = bxNewKey();                      // made here, in the browser
   try {
-    const body = {
-      name_tag: await bxNameTag(token, name),
-      name_ct: await bxSeal(token, name),
-      auth: await bxAuthCred(token),
-      challenge,
-    };
-    if (email) body.email_ct = await bxSeal(token, email);   // optional, sealed like the rest
-    const r = await fetch("/api/account/register", { method: "POST",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const d = await r.json();
-    if (!r.ok || !d.ok) throw new Error((d && d.error) || "the server refused");
-    await bxAccountSignedIn(d.user, token);
-    bxAccountReveal(token, BXACCT.name || name);
+    const r = await fetch("/chat/auth/signup", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential: await bxCredential(key),
+                             handle: bxHandle(key),
+                             captcha: challenge || "" }) });
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d || !d.user) throw new Error((d && d.detail) || "the server refused");
+    await bxKeyPut(d.user.id, await bxDataKey(key));   // the cache both halves use
+    await bxAccountSignedIn(d.user);
+    bxAccountReveal(key, BXACCT.name);
   } catch (e) {
     if (go) go.textContent = "create";
     if (status) status.textContent = String((e && e.message) || e);
@@ -8580,16 +8620,17 @@ async function bxAccountRegister(name, email, token, challenge, status, go) {
   }
   return true;
 }
-function bxAccountReveal(token, name) {
+function bxAccountReveal(key, name) {
   const wrap = bxAccountForm();
   if (!wrap) return false;
-  wrap.appendChild(mk("div", { class: "mhead", text: "your token" }));
+  wrap.appendChild(mk("div", { class: "mhead", text: "your access key" }));
   wrap.appendChild(mk("div", { class: "panehint",
     text: (name ? name + " is in. " : "") +
-          "It is shown once. It is the login, and it is the only key to your saved " +
-          "designs — the server never sees it, so losing it loses them." }));
+          "It is shown once. It is the login to both halves of the app, and it is " +
+          "the only key to your saved designs — the server never sees it, so losing " +
+          "it loses them." }));
   const ta = mk("textarea", { class: "bxtok", readonly: "readonly", spellcheck: "false" });
-  ta.value = token;
+  ta.value = key;
   wrap.appendChild(ta);
   const row = mk("div", { class: "row" });
   const copy = mk("span", { class: "chip tiny", text: "copy" });
@@ -8597,7 +8638,7 @@ function bxAccountReveal(token, name) {
     let done = false;
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-        const p = navigator.clipboard.writeText(token);
+        const p = navigator.clipboard.writeText(key);
         if (p && p.catch) p.catch(() => {});
         done = true;
       }
@@ -8616,40 +8657,38 @@ function bxAccountReveal(token, name) {
 function bxAccountLogin() {
   const wrap = bxAccountForm();
   if (!wrap) return false;
-  wrap.appendChild(mk("div", { class: "mhead", text: "log in with a token" }));
+  wrap.appendChild(mk("div", { class: "mhead", text: "log in with your access key" }));
   wrap.appendChild(mk("div", { class: "panehint",
-    text: "an account shows its token once, when it is created — paste that here. " +
-          "It stays in this browser: it authenticates and it decrypts." }));
-  const lab = mk("label", { text: "token" });
+    text: "an account shows its access key once, when it is created — paste that " +
+          "here. It never leaves this browser: it authenticates and it decrypts." }));
+  const lab = mk("label", { text: "access key" });
   const inp = mk("input", { class: "bxinp", type: "password", autocomplete: "off",
-                            placeholder: "the 43-character token" });
+                            placeholder: "ast_…" });
   lab.appendChild(inp);
   wrap.appendChild(lab);
   const status = mk("div", { class: "panehint", text: "" });
   wrap.appendChild(status);
   const go = bxAccountRow(wrap, "log in", (btn) => {
-    const token = String(inp.value || "").trim();
-    if (!token) { status.textContent = "the token is empty"; return; }
+    const key = String(inp.value || "").trim();
+    if (!key) { status.textContent = "the access key is empty"; return; }
     if (typeof fetch !== "function") { status.textContent = "the app cannot reach the server"; return; }
     if (!bxCryptoReady()) { status.textContent = "this browser or origin has no WebCrypto"; return; }
     btn.textContent = "checking …";
-    bxAuthCred(token).then(auth =>
-      fetch("/api/account/login", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ auth }) })
-        .then(r => r.json())
-        .then(d => {
-          if (!d || !d.ok) throw new Error((d && d.error) || "that token is not an account");
-          return bxAccountSignedIn(d.user, token);
-        })
-        .then(() => {
-          if (BXACCT.locked) throw new Error("that token does not open this account's designs");
-          bxMenuClose();
-        }))
-      .catch(e => {
-        btn.textContent = "log in";
-        status.textContent = String((e && e.message) || e);
-        bxAccountPlace();
-      });
+    (async () => {
+      const r = await fetch("/chat/auth/signin", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: await bxCredential(key) }) });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.user)
+        throw new Error((d && d.detail) || "that access key is not an account");
+      await bxKeyPut(d.user.id, await bxDataKey(key));
+      await bxAccountSignedIn(d.user);
+      bxMenuClose();
+    })().catch(e => {
+      btn.textContent = "log in";
+      status.textContent = String((e && e.message) || e);
+      bxAccountPlace();
+    });
   });
   bxAccountPlace();
   return true;
@@ -8659,31 +8698,44 @@ function bxAccountUnlockForm() {
   if (!wrap) return false;
   wrap.appendChild(mk("div", { class: "mhead", text: "unlock your designs" }));
   wrap.appendChild(mk("div", { class: "panehint",
-    text: "the token is the key. The server never had it — this browser just needs " +
-          "to be told it again." }));
-  const lab = mk("label", { text: "token" });
+    text: "the access key is the key. The server never had it — this browser just " +
+          "needs to be told it again." }));
+  const lab = mk("label", { text: "access key" });
   const inp = mk("input", { class: "bxinp", type: "password", autocomplete: "off",
-                            placeholder: "the token your account showed you" });
+                            placeholder: "the key your account showed you" });
   lab.appendChild(inp);
   wrap.appendChild(lab);
   const status = mk("div", { class: "panehint", text: "" });
   wrap.appendChild(status);
   const go = bxAccountRow(wrap, "unlock", (btn) => {
-    const token = String(inp.value || "").trim();
-    if (!token) { status.textContent = "the token is empty"; return; }
+    const key = String(inp.value || "").trim();
+    if (!key) { status.textContent = "the access key is empty"; return; }
     if (!bxCryptoReady()) { status.textContent = "this browser or origin has no WebCrypto"; return; }
     const user = BXACCT.user;
-    if (!user || !user.name_ct) { status.textContent = "there is nothing locked here"; return; }
+    if (!user) { status.textContent = "there is nothing locked here"; return; }
     btn.textContent = "checking …";
-    bxUnseal(token, user.name_ct)
-      .catch(() => { throw new Error("that token cannot open this account's designs"); })
-      .then(() => bxAccountSignedIn(user, token))
-      .then(() => bxMenuClose())
-      .catch(e => {
-        btn.textContent = "unlock";
-        status.textContent = String((e && e.message) || e);
-        bxAccountPlace();
-      });
+    (async () => {
+      const cryptoKey = await bxDataKey(key);
+      const rows = await bxCanvasRecords();    // a wrong key must not pass: open one
+      if (rows.length) {
+        let opened = false;
+        for (const r of rows) {
+          try { await bxOpenRecord(cryptoKey, "canvas|" + r.id, r.blob); opened = true; break; }
+          catch (e) {}
+        }
+        if (!opened) throw new Error("that access key does not open this account's designs");
+      }
+      await bxKeyPut(user.id, cryptoKey);
+      BXACCT.key = cryptoKey;
+      BXACCT.locked = false;
+      bxAccountSync();
+      bxSessionRestore().then(() => bxSessionPush()).catch(() => {});
+      bxMenuClose();
+    })().catch(e => {
+      btn.textContent = "unlock";
+      status.textContent = String((e && e.message) || e);
+      bxAccountPlace();
+    });
   });
   bxAccountPlace();
   return true;
@@ -8704,42 +8756,70 @@ function bxAccountSaveForm(onSaved, given) {
   const { lab, inp } = bxAccountNameField(remembered || "design 1");
   wrap.appendChild(lab);
   const status = mk("div", { class: "panehint",
-    text: text.length + " bytes of design" +
-          (BXACCT.max ? " — sealed limit " + Math.round(BXACCT.max / 2 ** 20) + " MB" : "") });
+    text: text.length + " bytes of design" });
   wrap.appendChild(status);
   let saved = false;
   const go = bxAccountRow(wrap, "save", () => {
     if (saved) { bxMenuClose(); return; }
     const name = String(inp.value || "").trim();
     if (!name) { status.textContent = "the design needs a name"; return; }
-    bxAccountSave(name, design, status, go, () => {
+    bxAccountSave(name, design, status, go, (savedName, id) => {
       saved = true;
-      if (onSaved) onSaved(name);               // the tab takes the name it was saved under
+      if (onSaved) onSaved(savedName, id);     // the tab takes the name it was saved under
     });
   });
   bxAccountPlace();
   return true;
 }
+async function bxCanvasRecords() {             // the raw `canvas` rows: id + ciphertext
+  if (typeof fetch !== "function" || !BXACCT.user) return [];   // the key is not
+                                                 // needed to fetch — only to open
+  const r = await fetch("/chat/auth/store");
+  if (!r.ok) throw new Error("the store could not be read (HTTP " + r.status + ")");
+  const d = await r.json();
+  return Array.isArray(d && d.canvases) ? d.canvases : [];
+}
+async function bxCanvases() {                  // the list, decrypted: name + design
+  const rows = await bxCanvasRecords();
+  const out = [];
+  for (const r of rows) {
+    let name = "(unreadable)", design = null;
+    try {
+      const v = await bxOpenRecord(BXACCT.key, "canvas|" + r.id, r.blob);
+      name = String((v && v.name) || "canvas");
+      design = (v && v.design) || null;
+    } catch (e) {}
+    out.push({ id: r.id, name: name, updatedAt: r.updatedAt || 0, design: design });
+  }
+  out.sort((a, b) => (bxWhenMs(b.updatedAt) - bxWhenMs(a.updatedAt)));
+  return out;
+}
 async function bxAccountSave(name, design, status, go, onSaved) {
-  if (typeof fetch !== "function" || BXACCT.locked) return false;
+  if (typeof fetch !== "function" || !BXACCT.user || !BXACCT.key) return false;
   if (go) go.textContent = "sealing …";
   try {
-    const name_tag = await bxNameTag(BXACCT.token, name);
-    const name_ct = await bxSeal(BXACCT.token, name);
-    const blob = await bxSeal(BXACCT.token, design);
-    if (BXACCT.max && blob.ct.length > BXACCT.max)
+    const rows = await bxCanvasRecords();      // saving over a name replaces it
+    let id = "";
+    for (const r of rows) {
+      try {
+        const v = await bxOpenRecord(BXACCT.key, "canvas|" + r.id, r.blob);
+        if (String((v && v.name) || "") === name) { id = r.id; break; }
+      } catch (e) {}
+    }
+    if (!id) id = "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
+    const blob = await bxSealRecord(BXACCT.key, "canvas|" + id, { name: name, design: design });
+    if (blob.length > BX_CANVAS_MAX)
       throw new Error("that design is too big to seal (" +
-                      (blob.ct.length / 2 ** 20).toFixed(1) + " MB)");
+                      (blob.length / 2 ** 20).toFixed(1) + " MB)");
     if (go) go.textContent = "saving …";
-    const r = await fetch("/api/account/save", { method: "POST",
+    const r = await fetch("/chat/auth/store/sync", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name_tag, name_ct, blob }) });
-    const d = await r.json();
-    if (!r.ok || !d.ok) throw new Error((d && d.error) || "the server refused");
+      body: JSON.stringify({ canvases: { upserts: [{ id: id, blob: blob }], deletes: [] } }) });
+    if (!r.ok) throw new Error("the server refused (HTTP " + r.status + ")");
     try { localStorage.setItem("nnstudio_canvas_name", name); } catch (e) {}
     if (status) status.textContent = "saved as " + name + " ✓ (sealed)";
     if (go) go.textContent = "close";
-    if (onSaved) onSaved();
+    if (onSaved) onSaved(name, id);
   } catch (e) {
     if (go) go.textContent = "save";
     if (status) status.textContent = String((e && e.message) || e);
@@ -8762,31 +8842,30 @@ function bxAccountOpenForm() {
   bxAccountRow(wrap, "close", () => bxMenuClose());
   bxAccountPlace();
   if (typeof fetch !== "function") { status.textContent = "the app cannot reach the server"; return true; }
-  fetch("/api/account/canvases").then(r => r.json()).then(d => {
-    if (!d || !d.ok) throw new Error((d && d.error) || "the list could not be read");
-    return bxAccountList(list, status, d.canvases || []);
-  }).catch(e => {
+  bxCanvases().then(rows => bxAccountList(list, status, rows)).catch(e => {
     status.textContent = String((e && e.message) || e);
     bxAccountPlace();
   });
   return true;
 }
 function bxWhen(t) {
-  const d = new Date((Number(t) || 0) * 1000);
-  if (!d || !d.toLocaleString) return "";
+  const d = new Date(bxWhenMs(t));
+  if (!d || !d.toLocaleString || isNaN(d.getTime())) return "";
   try { return d.toLocaleString(); } catch (e) { return ""; }
 }
-async function bxAccountList(list, status, rows, token) {
+function bxWhenMs(t) {                         // epoch seconds, or an ISO string
+  if (typeof t === "number") return t * 1000;
+  const ms = Date.parse(String(t || ""));
+  return isNaN(ms) ? 0 : ms;
+}
+function bxAccountList(list, status, rows) {
   if (!list) return false;
-  token = token === undefined ? BXACCT.token : token;
   list.innerHTML = "";
   if (!rows.length) {
     status.textContent = "nothing saved yet — save this canvas first.";
     bxAccountPlace();
     return true;
   }
-  const names = await Promise.all(rows.map(r =>
-    bxUnseal(token, r.name_ct).then(n => String(n), () => "(unreadable)")));
   const count = () => {
     const left = (list.children || []).length;
     status.textContent = left ? left + (left === 1 ? " design" : " designs")
@@ -8794,17 +8873,17 @@ async function bxAccountList(list, status, rows, token) {
   };
   let armed = "";
   status.textContent = rows.length + (rows.length === 1 ? " design" : " designs");
-  rows.forEach((r, i) => {
-    const rowl = mk("div", { class: "rowl", title: "open " + names[i] });
-    rowl.appendChild(mk("span", { class: "nm", text: names[i] }));
-    rowl.appendChild(mk("span", { class: "dt", text: bxWhen(r.updated) }));
+  rows.forEach((r) => {
+    const rowl = mk("div", { class: "rowl", title: "open " + r.name });
+    rowl.appendChild(mk("span", { class: "nm", text: r.name }));
+    rowl.appendChild(mk("span", { class: "dt", text: bxWhen(r.updatedAt) }));
     const rm = mk("span", { class: "rm", text: "×", title: "delete it" });
     rm.addEventListener("click", (ev) => {
       if (ev && ev.stopPropagation) ev.stopPropagation();
       if (typeof fetch !== "function") return;
-      fetch("/api/account/delete", { method: "POST",
+      fetch("/chat/auth/store/sync", { method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name_tag: r.name_tag }) }).then(() => {
+        body: JSON.stringify({ canvases: { upserts: [], deletes: [r.id] } }) }).then(() => {
           if (rowl.remove) rowl.remove();
           else if (list.removeChild) list.removeChild(rowl);
           count();
@@ -8814,31 +8893,19 @@ async function bxAccountList(list, status, rows, token) {
     rowl.appendChild(rm);
     rowl.addEventListener("click", () => {
       const blank = !((bxExportCanvas().nodes || []).length);
-      if (!blank && armed !== r.name_tag) {     // an overwrite is asked twice
-        armed = r.name_tag;
-        status.textContent = "opening " + names[i] + " replaces the canvas — click it again";
+      if (!blank && armed !== r.id) {          // an overwrite is asked twice
+        armed = r.id;
+        status.textContent = "opening " + r.name + " replaces the canvas — click it again";
         return;
       }
-      status.textContent = "opening " + names[i] + " …";
-      bxAccountOpen(r.name_tag, names[i], status);
+      if (!r.design) { status.textContent = "that design could not be opened"; return; }
+      status.textContent = "opening " + r.name + " …";
+      if (!bxAccountOpenApply(r.name, r.design))
+        status.textContent = "that design is not a canvas";
     });
     list.appendChild(rowl);
   });
   bxAccountPlace();
-  return true;
-}
-function bxAccountOpen(name_tag, name, status) {
-  if (typeof fetch !== "function") return false;
-  fetch("/api/account/canvas?tag=" + encodeURIComponent(name_tag)).then(r => r.json()).then(d => {
-    if (!d || !d.ok || !d.blob) throw new Error((d && d.error) || "that design could not be read");
-    return bxUnseal(BXACCT.token, d.blob).then(design => {
-      if (!bxAccountOpenApply(name || "design", design))
-        throw new Error("that design is not a canvas");
-    });
-  }).catch(e => {
-    if (status) status.textContent = String((e && e.message) || e);
-    bxAccountPlace();
-  });
   return true;
 }
 function bxAccountOpenApply(name, design) {
@@ -8859,10 +8926,11 @@ function bxAccountOpenApply(name, design) {
 let BXSESSION = { hold: false, restored: false };
 
 function bxSessionNow() {
-  const tabs = (BX.projects || []).filter(p => p.saved).map(p => p.name);
+  const tabs = (BX.projects || []).filter(p => p.saved && p.canvas)
+                .map(p => ({ id: p.canvas, name: p.name }));
   const act = bxProject();
   return { tabs: tabs,
-           active: act && act.saved && tabs.indexOf(act.name) >= 0 ? act.name : null };
+           active: act && act.saved && act.canvas ? act.canvas : null };
 }
 function bxSessionStore(sn) {
   try { localStorage.setItem("nnstudio_session", JSON.stringify(sn)); } catch (e) {}
@@ -8875,55 +8943,31 @@ function bxSessionRead() {
 }
 function bxSessionPush() {                     // after every open, close, switch,
   if (BXSESSION.hold) return false;            // save: the screen's tab set lands
-  const sn = bxSessionNow();                   // in the browser \u2014 and, when an
-  bxSessionStore(sn);                          // account can seal, at the server
-  if (typeof fetch !== "function" || !BXACCT.user || !BXACCT.token || BXACCT.locked)
-    return true;
-  bxSeal(BXACCT.token, sn).then(session =>
-    fetch("/api/account/session", { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session }) })).catch(() => {});
-  return true;
-}
-function bxSessionMatch(sn, rows, names) {     // the session's tabs, in their saved
-  const out = [];                              // order, that still exist
-  for (const name of (sn && sn.tabs) || []) {
-    const i = (rows || []).findIndex((r, k) => names[k] === name);
-    if (i >= 0) out.push({ row: rows[i], name: name });
+  bxSessionStore(bxSessionNow());              // in this browser. The canvases
+  return true;                                 // themselves live in the account's
+}                                              // store, so nothing is posted here.
+function bxSessionMatch(sn, rows) {            // the session's tabs, still saved
+  const out = [];
+  for (const t of (sn && sn.tabs) || []) {
+    const hit = (rows || []).find(r => r.id === t.id);
+    if (hit) out.push(hit);
   }
   return out;
 }
-async function bxSessionRestore(fetcher) {     // at sign-in: open what was open
-  fetcher = fetcher || (typeof fetch === "function" ? fetch : null);
-  if (!fetcher || !BXACCT.user || !BXACCT.token || BXACCT.locked)
-    return false;
-  let sn = null;
-  try {
-    const d = await fetcher("/api/account/session").then(r => r.json());
-    if (d && d.ok && d.session) sn = await bxUnseal(BXACCT.token, d.session);
-  } catch (e) {}
-  if (!sn) sn = bxSessionRead();               // the browser's own memory
+async function bxSessionRestore() {            // at sign-in: open what was open
+  if (!BXACCT.user || !BXACCT.key) return false;
+  const sn = bxSessionRead();                  // this browser's own memory
+  if (!sn) return false;
   let rows = [];
-  try {
-    const d = await fetcher("/api/account/canvases").then(r => r.json());
-    if (d && d.ok) rows = d.canvases || [];
-  } catch (e) { return false; }
-  if (!sn || !rows.length) return false;
-  const names = await Promise.all(rows.map(r =>
-    bxUnseal(BXACCT.token, r.name_ct).then(n => String(n), () => "")));
-  const want = bxSessionMatch(sn, rows, names);
+  try { rows = await bxCanvases(); } catch (e) { return false; }
+  const want = bxSessionMatch(sn, rows);
   if (!want.length) return false;
   BXSESSION.hold = true;                       // the opens must not half-push
   let opened = 0, activeId = null;
   for (const w of want) {
-    try {
-      const d = await fetcher("/api/account/canvas?tag="
-                              + encodeURIComponent(w.row.name_tag)).then(r => r.json());
-      if (!d || !d.ok || !d.blob) continue;
-      const design = await bxUnseal(BXACCT.token, d.blob);
-      const pr = bxTabOpenSaved(w.name, design);
-      if (pr) { opened += 1; if (w.name === sn.active) activeId = pr.id; }
-    } catch (e) {}
+    if (!w.design) continue;
+    const pr = bxTabOpenSaved(w.name, w.design, w.id);
+    if (pr) { opened += 1; if (w.id === sn.active) activeId = pr.id; }
   }
   if (opened) {
     bxTabStash();                              // the open screen belongs to its tab
@@ -8933,13 +8977,13 @@ async function bxSessionRestore(fetcher) {     // at sign-in: open what was open
       BX.projects = BX.projects.filter(x => x !== blank);
       if (BX.active === blank.id) BX.active = null;
     }
-    const want = (activeId && bxProject(activeId)) ? activeId
-               : (bxProject() ? BX.active
-                              : ((BX.projects[BX.projects.length - 1] || {}).id || null));
-    if (want && want !== BX.active) {
-      bxTabStash();                            // \u2026and the one being left, too:
-      BX.active = want;                        // a tab's doc lives in its own stash
-      bxTabLoad(bxProject(want));
+    const wantId = (activeId && bxProject(activeId)) ? activeId
+                 : (bxProject() ? BX.active
+                                : ((BX.projects[BX.projects.length - 1] || {}).id || null));
+    if (wantId && wantId !== BX.active) {
+      bxTabStash();                            // …and the one being left, too:
+      BX.active = wantId;                      // a tab's doc lives in its own stash
+      bxTabLoad(bxProject(wantId));
     } else {
       bxTabsRender();                          // the screen is already the right one
     }
@@ -9064,9 +9108,10 @@ function bxTabNew() {                          // a blank canvas, its own tab
   bxSessionPush();
   return p;
 }
-function bxTabOpenSaved(name, doc) {           // a saved canvas → its own tab
+function bxTabOpenSaved(name, doc, canvasId) { // a saved canvas → its own tab
   bxTabStash();
-  const p = { id: bxId(), name: String(name || "saved canvas"), dirty: false, saved: true };
+  const p = { id: bxId(), name: String(name || "saved canvas"),
+              canvas: String(canvasId || ""), dirty: false, saved: true };
   (BX.projects = BX.projects || []).push(p);
   BX.active = p.id;
   if (!bxTabLoad(p, doc)) {
@@ -9113,9 +9158,10 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
     if (!design) design = (bxTabStash() || {}).doc || null;   // saving from inside one
     if (!design) { bxTabsSay("come back out to the top level to save"); return false; }
     bxTabsSay("name this project \u2026");
-    bxAccountSaveForm((name) => {              // the dialog seals and posts it
+    bxAccountSaveForm((name, id) => {          // the dialog seals and posts it
       if (!name) return;
       p.name = String(name);
+      p.canvas = String(id || "");
       p.saved = true;
       p.dirty = false;
       bxTabsSay("saved · " + p.name + " ✓");
@@ -9128,7 +9174,8 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
   if (!design) design = (bxTabStash() || {}).doc || null;
   if (!design) { bxTabsSay("come back out to the top level to save"); return false; }
   bxTabsSay("saving \u00b7 " + p.name + " \u2026");
-  bxAccountSave(p.name, design, null, null, () => {
+  bxAccountSave(p.name, design, null, null, (name, id) => {
+    p.canvas = String(id || "");
     p.dirty = false;
     bxTabsSay("saved · " + p.name + " ✓");
     bxTabsRender();
@@ -9213,7 +9260,7 @@ function bxtabMenuBuild() {                    // the + : New Canvas, Saved Canv
     return;
   }
   if (BXACCT.locked) {
-    item("the account is locked \u2014 unlock it with your token", "", null, true);
+    item("the account is locked \u2014 unlock it with your access key", "", null, true);
     return;
   }
   const list = mk("div", { class: "bxlist" });
@@ -9221,10 +9268,8 @@ function bxtabMenuBuild() {                    // the + : New Canvas, Saved Canv
   menu.appendChild(list);
   menu.appendChild(status);
   if (typeof fetch !== "function") { status.textContent = "the app cannot reach the server"; return; }
-  fetch("/api/account/canvases").then(r => r.json()).then(d => {
-    if (!d || !d.ok) throw new Error((d && d.error) || "the list could not be read");
-    return bxTabSavedRows(list, status, d.canvases || []);
-  }).catch(e => { status.textContent = String((e && e.message) || e); });
+  bxCanvases().then(rows => bxTabSavedRows(list, status, rows))
+              .catch(e => { status.textContent = String((e && e.message) || e); });
 }
 async function bxTabSavedRows(list, status, rows) {
   list.innerHTML = "";
@@ -9232,31 +9277,24 @@ async function bxTabSavedRows(list, status, rows) {
     status.textContent = "nothing saved yet \u2014 Ctrl+S saves this canvas";
     return true;
   }
-  const names = await Promise.all(rows.map(r =>
-    bxUnseal(BXACCT.token, r.name_ct).then(n => String(n), () => "(unreadable)")));
   status.textContent = rows.length + (rows.length === 1 ? " canvas" : " canvases");
-  rows.forEach((r, i) => {
-    const rowl = mk("div", { class: "rowl", title: "open " + names[i] + " in a new tab" });
-    rowl.appendChild(mk("span", { class: "nm", text: names[i] }));
-    rowl.appendChild(mk("span", { class: "dt", text: bxWhen(r.updated) }));
-    rowl.addEventListener("click", () => bxTabOpenSavedRow(r.name_tag, names[i], status));
+  rows.forEach((r) => {
+    const rowl = mk("div", { class: "rowl", title: "open " + r.name + " in a new tab" });
+    rowl.appendChild(mk("span", { class: "nm", text: r.name }));
+    rowl.appendChild(mk("span", { class: "dt", text: bxWhen(r.updatedAt) }));
+    rowl.addEventListener("click", () => bxTabOpenSavedRow(r, status));
     list.appendChild(rowl);
   });
   return true;
 }
-async function bxTabOpenSavedRow(tag, name, status) {
-  if (typeof fetch !== "function" || typeof status === "undefined") return;
-  if (status) status.textContent = "opening " + name + " \u2026";
-  try {
-    const r = await fetch("/api/account/canvas?tag=" + encodeURIComponent(tag));
-    const d = await r.json();
-    if (!r.ok || !d.ok) throw new Error((d && d.error) || "that canvas could not be read");
-    const design = await bxUnseal(BXACCT.token, d.blob);
-    if (!bxTabOpenSaved(name, design)) throw new Error("that canvas cannot be opened here");
+function bxTabOpenSavedRow(row, status) {
+  if (!row || typeof status === "undefined") return;
+  if (status) status.textContent = "opening " + row.name + " \u2026";
+  if (!row.design) { status.textContent = "that canvas could not be opened"; return; }
+  if (!bxTabOpenSaved(row.name, row.design, row.id))
+    status.textContent = "that canvas cannot be opened here";
+  else
     bxtDropsClose();
-  } catch (e) {
-    if (status) status.textContent = String((e && e.message) || e);
-  }
 }
 
 // ---- the AI agent tab: a conversation, not a canvas -------------------------
@@ -10413,7 +10451,7 @@ function bxtInit() {
   bxtDropsClose();                             // all menus start closed
   bxtRefresh();
   bxAccountSync();                             // the tool strip already says guest
-  bxSplash(!!bxTokenRecall(), "opening your canvases \u2026");   // a remembered key may
+  bxSplash(bxSessionHint(), "opening your canvases \u2026");   // a live session may
   bxAccountLoad();                             // …and the server says who it is
   if (typeof setTimeout === "function")        // bring saved tabs back: hold the veil,
     setTimeout(() => bxSplash(false), 6000);   // but never longer than a breath
@@ -10443,7 +10481,8 @@ function bxGGUFLoad(boxId, canvas, file, repo) {   // put a built model inside a
   const clean = BX.nodes.every(n => n === b || crop(n));
   const textly = (canvas.nodes || []).some(n => n.kind === "tokenize" ||
                                                 n.kind === "detokenize");
-  const whole = textly || !!(canvas.model && canvas.model.vision);  // a pipeline
+  const whole = textly || !!(canvas.model && (canvas.model.vision ||
+                canvas.model.fidelity === "diffusers"));   // a pipeline
   if (canvas.model && canvas.model.vision && !clean)
     return false;                              // the tower needs the whole page
   if (clean && whole) {
