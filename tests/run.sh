@@ -97,6 +97,12 @@ if [ "${1:-}" = "--live" ]; then
   C=$(curl -s -m 10 localhost:8124/chat | head -c 40)
   case "$C" in *"<html"*) ok;; *) bad;; esac
 
+  step "live landing (the guest front door)"
+  A=$(curl -s -m 10 localhost:8124/chat/ | grep -o 'assets/[^"]*\.js' | head -1)
+  L=$(curl -s -m 10 "localhost:8124/chat/$A" | grep -c "nnstudio_landed")
+  S=$(curl -s -m 10 localhost:8124/ | grep -c "nnstudio_landed")
+  if [ "$L" -ge 1 ] && [ "$S" -ge 1 ]; then ok; else bad; echo "    chat=$L studio=$S"; fi
+
   step "live chat gateway (in-process)"
   H=$(curl -s -m 10 localhost:8124/chat/healthz | head -c 40)
   case "$H" in *'"ok":true'*) ok;; *) bad;; esac

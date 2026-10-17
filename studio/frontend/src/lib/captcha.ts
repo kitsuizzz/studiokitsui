@@ -1,11 +1,9 @@
 /**
- * The Turnstile "I'm not a robot" site key, baked in at build time
- * (VITE_TURNSTILE_SITE_KEY — see frontend/.env.example). The official test
- * key works on any domain and needs no Cloudflare account; a real deployment
- * builds with its own key. Empty = the robot check is off and the widget is
- * not rendered at all.
+ * The Turnstile "I'm not a robot" widget's script loader. There is ONE key for
+ * the bot check — the app's .env (TURNSTILE_SITE_KEY) — and it reaches this
+ * half at runtime through GET /auth/config, so a build never carries a key and
+ * both halves always show the same widget. See lib/auth.ts's fetchAuthConfig.
  */
-export const CAPTCHA_SITE_KEY: string = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? "";
 
 /** The subset of the Turnstile browser API the dialog uses (explicit render). */
 type TurnstileApi = {
@@ -37,11 +35,10 @@ let loader: Promise<TurnstileApi | null> | null = null;
 
 /**
  * Lazily load the Turnstile script (render=explicit, so nothing renders until
- * we call render()). Resolves to the API, or null when no site key is
- * configured or the script can't load (e.g. offline).
+ * we call render()). Resolves to the API, or null when the script can't load
+ * (e.g. offline); the caller only loads it once it has a site key.
  */
 export function loadTurnstile(): Promise<TurnstileApi | null> {
-  if (!CAPTCHA_SITE_KEY) return Promise.resolve(null);
   if (window.turnstile) return Promise.resolve(window.turnstile);
   if (!loader) {
     loader = new Promise<TurnstileApi | null>((resolve) => {

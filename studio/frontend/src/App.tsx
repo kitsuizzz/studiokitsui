@@ -33,6 +33,7 @@ import {
   fetchMe,
   type MeResponse,
   guestToProvider,
+  markLanded,
   markSession,
   proveAdmin,
   providerToGuest,
@@ -750,6 +751,10 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const signedIn = sessionHint();
+    // This welcome is the app's front door for guests: mark it served, so the
+    // canvas half lands a first-visit guest here (and never bounces the
+    // switch's Studio link afterwards).
+    markLanded();
     // A guest's providers are session-only; purge the legacy cookie so an old
     // build's write can never resurrect one.
     if (!signedIn) clearGuestSession();

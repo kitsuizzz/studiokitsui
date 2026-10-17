@@ -5049,8 +5049,9 @@ check("the session remembers the saved tabs, in the browser", () => {
   eql(__t.bxProject().id, keepId, "the canvas is left as it was found");
 });
 
-check("the boot veil: only a remembered key waits behind it", () => {
-  eql(getEl("bxsplash").hidden, true, "the harness booted unveiled (no key in store)");
+check("the boot veil: only a remembered key waits behind it", async () => {
+  for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r));  // the boot settles
+  eql(getEl("bxsplash").hidden, true, "the harness booted unveiled (no session in store)");
   __t.bxSplash(true, "opening your canvases \u2026");
   eql([getEl("bxsplash").hidden, getEl("bxsplashnote").textContent],
       [false, "opening your canvases \u2026"], "\u2026up with its note when asked");
@@ -6353,6 +6354,90 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   while (__t.BX.nodes.length > nodes0)         // the opened design steps aside
     __t.bxRemove(__t.BX.nodes[__t.BX.nodes.length - 1].id);
   eql(__t.BX.nodes.length, nodes0, "the canvas is left as it was found");
+});
+
+checkAsync("the landing: a first-visit guest is bounced to the welcome, once", async () => {
+  const turn = () => new Promise(r => setImmediate(r));
+  const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
+  const keepLS = global.localStorage;
+  const store = {};
+  global.localStorage = {
+    getItem: (k) => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = String(v); },
+    removeItem: (k) => { delete store[k]; },
+  };
+  const keepLoc = global.location;
+  global.location = { replaced: "", replace(u) { this.replaced = String(u); } };
+  const keepFetch = global.fetch;
+  const answer = (status, body) => ({ ok: status < 400, status: status, json: async () => body });
+  const guest = async (url) => {
+    const u = String(url);
+    if (u === "/chat/auth/config")
+      return answer(200, { captcha: false, site_key: "", session_days: 30 });
+    if (u === "/chat/auth/me") return answer(401, { detail: "Not signed in." });
+    return answer(404, {});
+  };
+  const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key,
+                     locked: __t.BXACCT.locked, known: __t.BXACCT.known };
+  const keepRestored = __t.BXSESSION.restored;
+  __t.BXSESSION.restored = true;               // no session restore on this path
+  const pristine = () => {
+    __t.BXACCT.known = false;
+    __t.BXACCT.user = null;
+    __t.BXACCT.key = null;
+    __t.BXACCT.locked = false;
+  };
+  // 1. a first visit, a guest: the welcome is the front door
+  global.fetch = guest;
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "/chat", "a first-visit guest lands on the welcome");
+  ok(store.nnstudio_landed === "1", "\u2026and the landing is marked");
+  // 2. the switch's Studio link: a guest who came to draw stays
+  global.location.replaced = "";
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "", "the switch's Studio link is not bounced again");
+  eql(getEl("bxuname").textContent, "guest", "\u2026the canvas is a guest's, as before");
+  // 3. a live session with no hint (the cookie outlived localStorage): the
+  //    canvas is home for a signed-in account
+  global.fetch = async (url) => {
+    const u = String(url);
+    if (u === "/chat/auth/config")
+      return answer(200, { captcha: false, site_key: "", session_days: 30 });
+    if (u === "/chat/auth/me") return answer(200, { user: { id: "u-live", name: "tester" } });
+    return answer(404, {});
+  };
+  delete store.nnstudio_landed;                // a fresh browser, but a live cookie
+  delete store.nnstudio_account;
+  global.location.replaced = "";
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "", "a live session keeps the canvas (no hint needed)");
+  // 4. the server unreachable: nobody is bounced on a guess
+  global.fetch = async () => { throw new Error("offline"); };
+  delete store.nnstudio_landed;
+  global.location.replaced = "";
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "", "an unreachable server bounces nobody");
+  // tidy: the world goes back as it was
+  __t.BXACCT.user = keepAcct.user;
+  __t.BXACCT.key = keepAcct.key;
+  __t.BXACCT.locked = keepAcct.locked;
+  __t.BXACCT.known = keepAcct.known;
+  __t.BXSESSION.restored = keepRestored;
+  __t.bxAccountSync();
+  if (keepLoc === undefined) delete global.location;
+  else global.location = keepLoc;
+  if (keepLS === undefined) delete global.localStorage;
+  else global.localStorage = keepLS;
+  if (keepFetch === undefined) delete global.fetch;
+  else global.fetch = keepFetch;
 });
 
 Promise.all(pending).then(async () => {      // async checks report with the rest

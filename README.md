@@ -17,6 +17,10 @@ The top bar carries the switch. **Studio** is the canvas, at `/` — everything
 this README describes. **Chat** is AI Studio (chat.kitsui) at `/chat`: the
 conversation app with agents, providers, web tools and the studio builder.
 
+A guest's first visit to `/` lands on the Chat half's welcome — the app's
+front door for guests (Create an account, or Continue as guest) — and the
+switch's Studio link then keeps them on the canvas.
+
 They are one app on one origin and **one server**: `./run.sh` is the whole
 thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
 (FastAPI — accounts, the encrypted store, the OpenAI pass-through) **inside

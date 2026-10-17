@@ -38,6 +38,21 @@ export function clearSession(): void {
   }
 }
 
+/**
+ * The landing marker: this welcome is the app's front door for guests. The
+ * canvas half reads it and lands a first-visit guest here — once per browser —
+ * so the switch's Studio link sticks afterwards (no bounce loop).
+ */
+const LANDING_MARK = "nnstudio_landed";
+
+export function markLanded(): void {
+  try {
+    localStorage.setItem(LANDING_MARK, "1");
+  } catch {
+    // Storage unavailable: the canvas half's own mark covers the first visit.
+  }
+}
+
 interface AuthResponse {
   /** The access key — sign-up only, and the only place it is ever returned.
       The browser minted it, so the server never had it to return. */

@@ -36,9 +36,11 @@ otherwise.
 
 `VITE_BASE_PATH=chat` is what makes the app address itself (and its gateway)
 under the `/chat` prefix; the same-origin gateway default is `/chat/v1`, so no
-other variable is needed. The Turnstile site key is read at runtime from
-`GET /chat/auth/config` (the build-time `VITE_TURNSTILE_SITE_KEY` is only a
-fallback), so one build serves any deployment.
+other variable is needed. The Turnstile site key is read at runtime from `GET /chat/auth/config`:
+there is **one key for the bot check** (the app's `.env`, `TURNSTILE_SITE_KEY`)
+and no build-time key, so one build serves any deployment — and a deployment
+that leaves `TURNSTILE_SITE_KEY` empty shows no widget at all (sign-ups then
+fail the robot check).
 
 ## The database
 

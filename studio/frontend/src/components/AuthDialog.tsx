@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { XIcon } from "./Icon";
 import { fetchAuthConfig, providersFrom, signin, signup } from "../lib/auth";
-import { CAPTCHA_SITE_KEY, loadTurnstile } from "../lib/captcha";
+import { loadTurnstile } from "../lib/captcha";
 import type { AccountUser, SavedProvider } from "../types";
 
 interface AuthDialogProps {
@@ -45,22 +45,22 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
 
   // The Turnstile "I'm not a robot" widget: sign-up only, and only when the
   // server's /auth/config says the check is on and hands over its public site
-  // key. "loading" until the script and widget are up, "failed" when the
-  // script couldn't load (e.g. offline). The build-time key (if any) is the
-  // fallback for a deployment that predates /auth/config.
+  // key — the ONE key for the bot check, which both halves share (there is no
+  // build-time key). "loading" until the script and widget are up, "failed"
+  // when the script couldn't load (e.g. offline).
   const captchaRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef("");
   const pollRef = useRef(0);
   const [captcha, setCaptcha] = useState<"none" | "loading" | "ready" | "failed">("none");
-  const [siteKey, setSiteKey] = useState(CAPTCHA_SITE_KEY);
-  const [captchaOn, setCaptchaOn] = useState(Boolean(CAPTCHA_SITE_KEY));
+  const [siteKey, setSiteKey] = useState("");
+  const [captchaOn, setCaptchaOn] = useState(false);
 
   useEffect(() => {
     let disposed = false;
     void fetchAuthConfig().then((cfg) => {
       if (disposed || !cfg) return;
       setCaptchaOn(cfg.captcha);
-      if (cfg.site_key) setSiteKey(cfg.site_key);
+      setSiteKey(cfg.site_key);
     });
     return () => {
       disposed = true;

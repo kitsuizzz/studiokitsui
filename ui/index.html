@@ -8249,6 +8249,23 @@ function bxSessionMark() {
 function bxSessionClear() {
   try { localStorage.removeItem("nnstudio_account"); } catch (e) {}
 }
+// The landing page (the Chat half's welcome) is the app's front door for
+// guests: the first visit to / that turns out to be a guest is landed there,
+// and the marker the Chat half sets on boot makes the switch's Studio link
+// stick afterwards — a guest who came to draw stays on the canvas.
+function bxLandingSeen() {
+  try { return localStorage.getItem("nnstudio_landed") === "1"; } catch (e) { return false; }
+}
+function bxLandingMark() {
+  try { localStorage.setItem("nnstudio_landed", "1"); } catch (e) {}
+}
+function bxLand() {                            // the one bounce per browser
+  if (bxLandingSeen() || BXACCT.user) return false;   // signed in: the canvas is home
+  bxLandingMark();                             // marked even if the bounce is
+  if (typeof location !== "undefined" && location.replace)   // blocked: no loop
+    location.replace("/chat");
+  return true;
+}
 function bxNewKey() {                          // the access key the browser mints
   const bytes = new Uint8Array(32);
   if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
@@ -8369,6 +8386,7 @@ function bxAccountLoad() {                     // who is this, and what does the
   if (typeof fetch !== "function") {           // no server to ask: a guest, and that is that
     BXACCT.known = true;
     bxAccountSync();
+    bxLand();
     return;
   }
   // the sign-up dialog's needs (the robot check and its public site key)
@@ -8377,17 +8395,21 @@ function bxAccountLoad() {                     // who is this, and what does the
     BXACCT.site = d.site_key || "";
     BXACCT.captcha = !!d.captcha;
   }).catch(() => {});
-  if (!bxSessionHint()) {                      // nothing to ask about: a guest
+  if (!bxSessionHint() && bxLandingSeen()) {   // a guest, landed once already
     BXACCT.known = true;
     bxAccountSync();
     return;
   }
+  // A first visit (no landing yet) asks the server, so a guest is landed on
+  // the welcome while a signed-in account — a live cookie with no hint — keeps
+  // the canvas. An unreachable server bounces nobody.
   fetch("/chat/auth/me").then(r => r.json().then(d => ({ ok: r.ok, d: d })))
     .then(({ ok, d }) => {
       BXACCT.known = true;
       if (!ok || !d || !d.user) {              // the hint outlived the session
         bxSessionClear();
         bxAccountSync();
+        bxLand();
         return;
       }
       return bxAccountSignedIn(d.user);        // the key comes from the cache
@@ -10451,8 +10473,9 @@ function bxtInit() {
   bxtDropsClose();                             // all menus start closed
   bxtRefresh();
   bxAccountSync();                             // the tool strip already says guest
-  bxSplash(bxSessionHint(), "opening your canvases \u2026");   // a live session may
-  bxAccountLoad();                             // …and the server says who it is
+  bxSplash(bxSessionHint() || !bxLandingSeen(),  // a live session — or a first
+           "opening your canvases \u2026");      // visit, which may land elsewhere —
+  bxAccountLoad();                             // and the server says who it is
   if (typeof setTimeout === "function")        // bring saved tabs back: hold the veil,
     setTimeout(() => bxSplash(false), 6000);   // but never longer than a breath
   fetchBackend();                              // who is connected right now
