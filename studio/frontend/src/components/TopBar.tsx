@@ -57,10 +57,6 @@ export default function TopBar({ account, accountState, onSignIn, onSignUp, onSi
   return (
     <header className="topbar" ref={rootRef}>
       <BrandLockup />
-      <nav className="topbar-nav" aria-label="the app">
-        <span className="topbar-nav-on">Chat</span>
-        <a className="topbar-nav-link" href="/studio">Studio</a>
-      </nav>
       <div className="topbar-user-wrap">
         <button type="button" className="topbar-settings" aria-label="Settings" onClick={onOpenSettings}>
           <SettingsIcon size={14} />

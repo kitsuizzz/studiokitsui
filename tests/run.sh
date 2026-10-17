@@ -100,12 +100,10 @@ if [ "${1:-}" = "--live" ]; then
   step "live landing (the door and /studio)"
   D=$(curl -s -m 10 localhost:8124/ | grep -c "bxAtDoor")
   T=$(curl -s -m 10 localhost:8124/studio | grep -c "bxAtDoor")
-  A=$(curl -s -m 10 localhost:8124/chat/ | grep -o 'assets/[^"]*\.js' | head -1)
-  C=$(curl -s -m 10 "localhost:8124/chat/$A" | grep -c "/studio")
-  if [ "$D" -ge 1 ] && [ "$T" -ge 1 ] && [ "$C" -ge 1 ]; then
+  if [ "$D" -ge 1 ] && [ "$T" -ge 1 ]; then
     ok
   else
-    bad; echo "    door=$D studio=$T chat=$C"
+    bad; echo "    door=$D studio=$T"
   fi
 
   step "live chat gateway (in-process)"

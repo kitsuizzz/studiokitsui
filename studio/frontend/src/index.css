@@ -115,40 +115,6 @@ img {
 
 /* The one app's two halves: Chat is this page, Studio is the canvas at /. */
 
-.topbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-left: 20px;
-  font: 500 11px/1.4 var(--font-mono);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.topbar-nav-on {
-  color: var(--text);
-}
-
-.topbar-nav-on::before {
-  content: "";
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--dot);
-  margin-right: 6px;
-  vertical-align: 1px;
-}
-
-.topbar-nav-link {
-  color: var(--label-2);
-  text-decoration: none;
-}
-
-.topbar-nav-link:hover {
-  color: var(--text);
-}
-
 /* brand:css */
 .brand-lockup { display: block; height: 20px; width: 114.1px; overflow: visible; color: var(--text); }
 .brand-wire { fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; }

@@ -3201,7 +3201,6 @@ export default function App() {
               onFirstMessage={(t) => void send(t, [])}
               source={effectiveSource("greeting", appOverrides)}
               onOpenAuth={(mode) => setAuthMode(mode)}
-              onOpenStudio={() => { window.location.href = "/studio"; }}
               signedIn={accountState === "user"}
               composer={{
                 onSend: send,

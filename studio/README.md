@@ -12,11 +12,12 @@ styles in `frontend/src/index.css`), the account work in
 ## The landing
 
 This half is the app's landing page for guests: the welcome's choice step
-offers **Chat** (Continue as guest), **Studio** (the canvas at `/studio`) and
-**Create an account**, and the canvas half's door (`/`) sends every guest
-here. An account skips the welcome — its `place` record (the one unsealed
-record in its store, written by whichever half is opened) routes the arrival
-to the half it left off in.
+offers **Continue as guest** (the chat) and **Create an account**, and the
+canvas half's door (`/`) sends every guest here. An account skips the welcome —
+its `place` record (the one unsealed record in its store, written by whichever
+half is opened) routes the arrival to the half it left off in. The two halves
+carry no cross-navigation: `/chat` and `/studio` are their addresses, and the
+door is what moves between them.
 
 ## What runs
 

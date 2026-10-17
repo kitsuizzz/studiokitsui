@@ -18,12 +18,12 @@ this README describes. **Chat** is AI Studio (chat.kitsui) at `/chat`: the
 conversation app with agents, providers, web tools and the studio builder.
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
-lands on the landing page — the Chat half's welcome, with Chat (Continue as
-guest), Studio, and Create an account all a click away — while an **account**
-always lands wherever it left off last time, which is the `place` record in
-its store: on the backend, so it follows the account to any device. `/studio`
-is the canvas itself and never bounces; the switch's links are `/chat` and
-`/studio`.
+lands on the landing page — the Chat half's welcome, where Continue as guest
+opens the chat and Create an account is one click — while an **account** always
+lands wherever it left off last time, which is the `place` record in its store:
+on the backend, so it follows the account to any device. The halves have their
+own addresses, `/chat` and `/studio` (the canvas never bounces); there is no
+switch in the top bar — the door is the navigation.
 
 They are one app on one origin and **one server**: `./run.sh` is the whole
 thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
