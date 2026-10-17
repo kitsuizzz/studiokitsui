@@ -2,40 +2,37 @@ import type { AccountUser, GuestSession, SavedProvider } from "../types";
 import { APP_BASE } from "./base";
 import { credentialFromKey, generateAccessKey, handleFromKey, sealSecret } from "./crypto";
 
-const TOKEN_COOKIE = "aistudio.account";
-const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365; // one year
-
 /**
- * The signed-in account's opaque bearer token, kept in a cookie (the same
- * pattern as the guest cookie in lib/guest.ts) so a reload restores the sign-in
- * without re-prompting. The token is the only secret stored here — the
- * account record (its handle) is re-fetched from /auth/me on load, and the
- * access key itself is never kept: it is shown once, at creation, and lives
- * only in the user's own password manager / notes.
+ * The session lives in an HttpOnly cookie the server sets on sign-up and
+ * sign-in: page scripts cannot read it, so a cross-site script cannot steal
+ * it. What is kept here is only a hint — "a sign-in may be live" — so a cold
+ * boot skips the /auth/me round trip for guests. The server always has the
+ * last word: a hint without a session fails that call once and lands in the
+ * guest shell. Both halves of Studio Kitsui share the hint (one origin), and
+ * the access key itself is never kept — it is shown once, at creation, and
+ * lives only in the user's own password manager / notes.
  */
+const SESSION_HINT = "nnstudio_account";
 
-export function readAuthToken(): string | null {
+export function sessionHint(): boolean {
   try {
-    const part = document.cookie.split(/;\s*/).find((c) => c.startsWith(TOKEN_COOKIE + "="));
-    if (!part) return null;
-    const value = decodeURIComponent(part.slice(TOKEN_COOKIE.length + 1));
-    return value || null;
+    return localStorage.getItem(SESSION_HINT) === "1";
   } catch {
-    return null;
+    return false;
   }
 }
 
-export function writeAuthToken(token: string): void {
+export function markSession(): void {
   try {
-    document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; path=/; max-age=${COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+    localStorage.setItem(SESSION_HINT, "1");
   } catch {
-    // Storage unavailable (private mode, etc.) — the sign-in won't survive a reload.
+    // Storage unavailable (private mode): the next boot probes /auth/me anyway.
   }
 }
 
-export function clearAuthToken(): void {
+export function clearSession(): void {
   try {
-    document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; samesite=lax`;
+    localStorage.removeItem(SESSION_HINT);
   } catch {
     // Ignore.
   }
@@ -45,6 +42,8 @@ interface AuthResponse {
   /** The access key — sign-up only, and the only place it is ever returned.
       The browser minted it, so the server never had it to return. */
   key?: string;
+  /** The session token: the server also sets it as the HttpOnly cookie the
+      browser rides; this copy is for CLIs and tests, not for the app. */
   token?: string;
   user?: AccountUser;
   /** The account's saved BYOK providers (if any); /auth/signin returns them. */
@@ -55,6 +54,37 @@ interface AuthResponse {
   adminKey?: string | null;
   /** The account's sealed agents (ciphertext only its owner can open). */
   agents?: string | null;
+}
+
+export interface AuthConfig {
+  /** The sign-up robot check is on (the server decides; the site key only
+      paints the widget). */
+  captcha: boolean;
+  /** The public Turnstile site key (never the secret). */
+  site_key: string;
+  /** How long a session lasts, in days. */
+  session_days: number;
+}
+
+/**
+ * What a sign-up dialog needs to draw itself: whether the robot check is on
+ * and its public site key. Read at runtime (not baked in at build time), so
+ * one build serves any deployment — including the fused app, where the key
+ * lives in the repository's .env.
+ */
+export async function fetchAuthConfig(): Promise<AuthConfig | null> {
+  try {
+    const res = await fetch(`${APP_BASE}/auth/config`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<AuthConfig>;
+    return {
+      captcha: data.captcha === true,
+      site_key: typeof data.site_key === "string" ? data.site_key : "",
+      session_days: typeof data.session_days === "number" ? data.session_days : 30,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** What /auth/me resolves a stored token to, or null when it is unknown. */
@@ -101,14 +131,12 @@ export function providersFrom(data: { provider?: SavedProvider | null; providers
 }
 
 /** The identity + saved providers behind the stored token, or null when unknown. */
-export async function fetchMe(token: string, signal?: AbortSignal): Promise<MeResponse | null> {
-  // Network failures and timeouts PROPAGATE (the caller decides whether the
-  // session is dead or merely unreachable); a non-OK response means the
-  // server does not recognize this session.
-  const res = await fetch(`${APP_BASE}/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal,
-  });
+export async function fetchMe(signal?: AbortSignal): Promise<MeResponse | null> {
+  // The session cookie rides along (same-origin). Network failures and
+  // timeouts PROPAGATE (the caller decides whether the session is dead or
+  // merely unreachable); a non-OK response means the server does not
+  // recognize this session.
+  const res = await fetch(`${APP_BASE}/auth/me`, { signal });
   if (!res.ok) return null;
   let data: {
     user?: AccountUser;
@@ -147,14 +175,11 @@ export async function signin(key: string): Promise<AuthResponse> {
 }
 
 /** Best-effort: invalidate the token server-side even if the request fails. */
-export async function signout(token: string): Promise<void> {
+export async function signout(): Promise<void> {
   try {
-    await fetch(`${APP_BASE}/auth/signout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    await fetch(`${APP_BASE}/auth/signout`, { method: "POST" });
   } catch {
-    // The cookie is cleared locally either way.
+    // The server clears the cookie; a failed call leaves it to expire.
   }
 }
 
@@ -167,14 +192,14 @@ export async function signout(token: string): Promise<void> {
  * so the server stores opaque values; name/baseUrl/model stay readable, which
  * is what lets a device (and the server's own view) know the providers in use.
  */
-export async function saveProviders(token: string, providers: SavedProvider[], key: CryptoKey | null): Promise<void> {
+export async function saveProviders(providers: SavedProvider[], key: CryptoKey | null): Promise<void> {
   try {
     const stored = await Promise.all(
       providers.map(async (p) => ({ ...p, apiKey: await sealSecret(key, p.apiKey) }))
     );
     await fetch(`${APP_BASE}/auth/profile`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ providers: stored }),
     });
   } catch {
@@ -187,12 +212,9 @@ export async function saveProviders(token: string, providers: SavedProvider[], k
  * Nothing about the account's user type was readable before this; answering
  * the challenge with an admin key is the only way the server ever learns it.
  */
-export async function fetchAdminChallenge(token: string): Promise<string | null> {
+export async function fetchAdminChallenge(): Promise<string | null> {
   try {
-    const res = await fetch(`${APP_BASE}/auth/admin/challenge`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch(`${APP_BASE}/auth/admin/challenge`, { method: "POST" });
     if (!res.ok) return null;
     const data: { challenge?: string } = await res.json();
     return data.challenge || null;
@@ -202,11 +224,11 @@ export async function fetchAdminChallenge(token: string): Promise<string | null>
 }
 
 /** Answer a challenge with the admin key; true when the server accepts it. */
-export async function proveAdmin(token: string, challenge: string, key: string): Promise<boolean> {
+export async function proveAdmin(challenge: string, key: string): Promise<boolean> {
   try {
     const res = await fetch(`${APP_BASE}/auth/admin/prove`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ challenge, key }),
     });
     return res.ok;
@@ -217,11 +239,11 @@ export async function proveAdmin(token: string, challenge: string, key: string):
 
 /** Store (or clear) the account's sealed admin-key copy — server-side it is
     opaque ciphertext, kept so admin can be proven from another device. */
-export async function saveAdminKey(token: string, sealed: string | null): Promise<void> {
+export async function saveAdminKey(sealed: string | null): Promise<void> {
   try {
     await fetch(`${APP_BASE}/auth/admin/key`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: sealed }),
     });
   } catch {
@@ -230,11 +252,11 @@ export async function saveAdminKey(token: string, sealed: string | null): Promis
 }
 
 /** Store the account's sealed agents in its profile; the providers are left as they are. */
-export async function saveAgentsRecord(token: string, sealed: string | null): Promise<void> {
+export async function saveAgentsRecord(sealed: string | null): Promise<void> {
   try {
     await fetch(`${APP_BASE}/auth/profile`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agents: sealed }),
     });
   } catch {

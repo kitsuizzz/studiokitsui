@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { XIcon } from "./Icon";
-import { providersFrom, signin, signup } from "../lib/auth";
+import { fetchAuthConfig, providersFrom, signin, signup } from "../lib/auth";
 import { CAPTCHA_SITE_KEY, loadTurnstile } from "../lib/captcha";
 import type { AccountUser, SavedProvider } from "../types";
 
@@ -10,7 +10,6 @@ interface AuthDialogProps {
   /** The server confirmed; adopt the account + its saved providers (chip updates behind the dialog). */
   onDone: (
     user: AccountUser,
-    token: string,
     providers: SavedProvider[],
     accessKey: string,
     adminKey: string | null,
@@ -44,15 +43,29 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
   // (async) busy state cannot.
   const busyRef = useRef(false);
 
-  // The Turnstile "I'm not a robot" widget: sign-up only, and only when a
-  // site key was baked in at build time. "loading" until the script and
-  // widget are up, "failed" when the script couldn't load (e.g. offline).
+  // The Turnstile "I'm not a robot" widget: sign-up only, and only when the
+  // server's /auth/config says the check is on and hands over its public site
+  // key. "loading" until the script and widget are up, "failed" when the
+  // script couldn't load (e.g. offline). The build-time key (if any) is the
+  // fallback for a deployment that predates /auth/config.
   const captchaRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef("");
   const pollRef = useRef(0);
-  const [captcha, setCaptcha] = useState<"none" | "loading" | "ready" | "failed">(
-    CAPTCHA_SITE_KEY ? "loading" : "none",
-  );
+  const [captcha, setCaptcha] = useState<"none" | "loading" | "ready" | "failed">("none");
+  const [siteKey, setSiteKey] = useState(CAPTCHA_SITE_KEY);
+  const [captchaOn, setCaptchaOn] = useState(Boolean(CAPTCHA_SITE_KEY));
+
+  useEffect(() => {
+    let disposed = false;
+    void fetchAuthConfig().then((cfg) => {
+      if (disposed || !cfg) return;
+      setCaptchaOn(cfg.captcha);
+      if (cfg.site_key) setSiteKey(cfg.site_key);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, []);
 
   /** The one click: the solved token is the sign-up intent, sent on the spot. */
   const submitSignup = async (captchaToken?: string) => {
@@ -66,7 +79,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
       // Adopt the account first (the chip updates behind the dialog), then
       // flip to the reveal: the key is shown exactly once, in this dialog.
       // The browser minted it, so it is also what unlocks the encrypted store.
-      onDone(res.user, res.token, providersFrom(res), res.key, res.adminKey ?? null, res.agents ?? null);
+      onDone(res.user, providersFrom(res), res.key, res.adminKey ?? null, res.agents ?? null);
       setIssuedKey(res.key);
     } catch (err) {
       // A token is single-use and the failed request already consumed it —
@@ -80,7 +93,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
   };
 
   useEffect(() => {
-    if (mode !== "signup" || !CAPTCHA_SITE_KEY || issuedKey) return;
+    if (mode !== "signup" || !captchaOn || !siteKey || issuedKey) return;
     let disposed = false;
     setCaptcha("loading");
     void loadTurnstile().then((ts) => {
@@ -93,7 +106,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
       if (!el) return;
       const dark = document.documentElement.dataset.theme === "dark";
       widgetIdRef.current = ts.render(el, {
-        sitekey: CAPTCHA_SITE_KEY,
+        sitekey: siteKey,
         theme: dark ? "dark" : "light",
         onSuccess: (token) => {
           void submitSignup(token);
@@ -120,7 +133,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, issuedKey]);
+  }, [mode, issuedKey, captchaOn, siteKey]);
 
   const submitSignin = async (e: FormEvent) => {
     e.preventDefault();
@@ -131,7 +144,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
     try {
       const res = await signin(keyValue);
       if (!res.user || !res.token) throw new Error("The server returned no session.");
-      onDone(res.user, res.token, providersFrom(res), keyValue.trim(), res.adminKey ?? null, res.agents ?? null);
+      onDone(res.user, providersFrom(res), keyValue.trim(), res.adminKey ?? null, res.agents ?? null);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -194,7 +207,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
             <h2 className="auth-title">{mode === "signup" ? "Create an account" : "Sign in"}</h2>
             <p className="auth-sub">
               {mode === "signup"
-                ? CAPTCHA_SITE_KEY
+                ? captchaOn
                   ? "One click is all it takes: tick the box below and your account is created. It issues an access key, shown to you exactly once."
                   : "Click below and your account is created. It issues an access key, shown to you exactly once."
                 : hint ?? "Welcome back. Paste the access key you stored when you created your account."}
@@ -214,10 +227,10 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
                   />
                 </label>
               )}
-              {mode === "signup" && CAPTCHA_SITE_KEY && (
+              {mode === "signup" && captchaOn && siteKey && (
                 <div ref={captchaRef} className="auth-captcha" aria-label="Robot check" />
               )}
-              {mode === "signup" && !CAPTCHA_SITE_KEY && (
+              {mode === "signup" && !(captchaOn && siteKey) && (
                 <button type="submit" className="btn" disabled={busy} onClick={() => void submitSignup()}>
                   {busy ? "Working…" : "Create account"}
                 </button>
@@ -232,7 +245,7 @@ export default function AuthDialog({ mode, onClose, onDone, onSwitchMode, hint }
                   {error}
                 </p>
               )}
-              {mode === "signup" && CAPTCHA_SITE_KEY && captcha === "failed" && (
+              {mode === "signup" && captchaOn && siteKey && captcha === "failed" && (
                 <p className="form-error" role="alert">
                   The robot check couldn't load — check your connection and reload the page.
                 </p>

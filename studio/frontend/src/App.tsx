@@ -28,19 +28,19 @@ import {
 } from "./lib/store";
 import { clearGuestSession } from "./lib/guest";
 import {
-  clearAuthToken,
+  clearSession,
   fetchAdminChallenge,
   fetchMe,
   type MeResponse,
   guestToProvider,
+  markSession,
   proveAdmin,
   providerToGuest,
-  readAuthToken,
   saveAdminKey,
   saveAgentsRecord,
   saveProviders,
+  sessionHint,
   signout as authSignout,
-  writeAuthToken,
 } from "./lib/auth";
 import { decryptJson, deriveEncKey, encryptJson, openSecret, sealSecret } from "./lib/crypto";
 import { cacheKey, dropCachedKey, getCachedKey } from "./lib/keyvault";
@@ -270,7 +270,7 @@ function loadWorkspace(): Workspace {
         const withChat = ensureChatKitsui(agents, choice);
         const activeAgentId = withChat.some((a) => a.id === parsed.activeAgentId) ? (parsed.activeAgentId as string) : CHAT_KITSUI_ID;
         const loaded: Workspace = { providers, agents: withChat, activeAgentId };
-        return readAuthToken() ? loaded : guestSafeWorkspace(loaded);
+        return sessionHint() ? loaded : guestSafeWorkspace(loaded);
       }
     }
   } catch {
@@ -386,7 +386,7 @@ async function decryptViews(
 
 /** Upload the reading spots that changed since the last sync (only those records; a removed spot is deleted). */
 async function syncReadingSpots(
-  cloud: { token: string; key: CryptoKey },
+  cloud: { key: CryptoKey },
   spotsRef: { current: Map<number, ReadingSpot> },
   syncedRef: { current: { views: Map<string, string> } },
   keepalive = false
@@ -403,7 +403,6 @@ async function syncReadingSpots(
   const deletes = [...synced.keys()].filter((id) => !spotsRef.current.has(Number(id)));
   if (!upserts.length && !deletes.length) return;
   const ok = await syncStore(
-    cloud.token,
     {
       conversations: { upserts: [], deletes: [] },
       studios: { upserts: [], deletes: [] },
@@ -431,7 +430,7 @@ async function decryptLast(key: CryptoKey, records: StoreRecord[]): Promise<numb
 
 /** Upload the last-session pointer when it changed (the account's one record). */
 async function syncLastSession(
-  cloud: { token: string; key: CryptoKey },
+  cloud: { key: CryptoKey },
   lastRef: { current: number | null },
   syncedRef: { current: { last: Map<string, string> } },
   keepalive = false
@@ -441,7 +440,6 @@ async function syncLastSession(
   if (id == null) {
     if (!synced.has("current")) return;
     const ok = await syncStore(
-      cloud.token,
       {
         conversations: { upserts: [], deletes: [] },
         studios: { upserts: [], deletes: [] },
@@ -455,7 +453,6 @@ async function syncLastSession(
   const signature = JSON.stringify({ conversationId: id });
   if (synced.get("current") === signature) return;
   const ok = await syncStore(
-    cloud.token,
     {
       conversations: { upserts: [], deletes: [] },
       studios: { upserts: [], deletes: [] },
@@ -501,7 +498,7 @@ export default function App() {
   const [platform, setPlatform] = useState<{ baseUrl: string; model: string; models: ModelInfo[] } | null>(null);
   /** The signed-in account's saved BYOK providers (empty = platform mode). */
   const [profile, setProfile] = useState<SavedProvider[]>([]);
-  const [accountState, setAccountState] = useState<AccountState>(() => (readAuthToken() ? "loading" : "guest"));
+  const [accountState, setAccountState] = useState<AccountState>(() => (sessionHint() ? "loading" : "guest"));
   const [authMode, setAuthMode] = useState<"signin" | "signup" | null>(null);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -540,8 +537,8 @@ export default function App() {
   const builderAbortRef = useRef<AbortController | null>(null);
   const titleAbortRef = useRef<AbortController | null>(null);
   const idRef = useRef(1);
-  /** The live cloud session (token + derived key); null for guests. */
-  const cloudRef = useRef<{ token: string; key: CryptoKey } | null>(null);
+  /** The live cloud session (the derived key); null for guests. */
+  const cloudRef = useRef<{ key: CryptoKey } | null>(null);
   /** The last-synced plaintext per record id, so saves upload only changes. */
   const syncedRef = useRef<{
     conversations: Map<string, string>;
@@ -574,7 +571,7 @@ export default function App() {
       // A guest's providers are session-only: the stored copy never carries
       // them (or their keys), so a reload comes back clean. A signed-in
       // account's providers come back from the server profile instead.
-      const persisted = readAuthToken() ? workspace : guestSafeWorkspace(workspace);
+      const persisted = sessionHint() ? workspace : guestSafeWorkspace(workspace);
       localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
     } catch {
       // storage unavailable
@@ -642,7 +639,7 @@ export default function App() {
   };
 
   /** Encrypt and upload a whole record set (the one-shot guest → account claim). */
-  const uploadAll = async (token: string, key: CryptoKey, list: Conversation[], studioList: Studio[]) => {
+  const uploadAll = async (key: CryptoKey, list: Conversation[], studioList: Studio[]) => {
     const convUpserts = await Promise.all(
       list.map(async (c) => ({ id: String(c.id), blob: await encryptJson(key, c) })),
     );
@@ -654,7 +651,7 @@ export default function App() {
     );
     // The guest's open conversation is where the new account should land back.
     const openId = list.some((c) => c.id === lastRef.current) ? lastRef.current : null;
-    await syncStore(token, {
+    await syncStore({
       conversations: { upserts: convUpserts, deletes: [] },
       studios: { upserts: studioUpserts, deletes: [] },
       views: { upserts: viewUpserts, deletes: [] },
@@ -722,18 +719,17 @@ export default function App() {
   /** Load the account's encrypted store. When the account has none yet, claim
       the browser's local records instead: encrypted, uploaded, then dropped. */
   const adoptCloud = async (
-    token: string,
     key: CryptoKey,
     fallback: { conversations: Conversation[]; studios: Studio[] },
   ) => {
-    const store = await fetchStore(token);
+    const store = await fetchStore();
     if (!store) {
       adopt([], []);
       return;
     }
     if (store.conversations.length === 0 && store.studios.length === 0) {
       if (fallback.conversations.length || fallback.studios.length) {
-        await uploadAll(token, key, fallback.conversations, fallback.studios);
+        await uploadAll(key, fallback.conversations, fallback.studios);
         adopt(fallback.conversations, fallback.studios);
         await clearLocalData();
         return;
@@ -753,10 +749,10 @@ export default function App() {
   // Persistence: load once, then save (debounced) on every change.
   useEffect(() => {
     let cancelled = false;
-    const token = readAuthToken();
+    const signedIn = sessionHint();
     // A guest's providers are session-only; purge the legacy cookie so an old
     // build's write can never resurrect one.
-    if (!token) clearGuestSession();
+    if (!signedIn) clearGuestSession();
     void (async () => {
       try {
         const overrides = await loadAppOverrides();
@@ -766,7 +762,7 @@ export default function App() {
           const [list, studioList] = await Promise.all([loadConversations(), loadStudios()]);
           return { conversations: recoverConversations(list ?? []), studios: studioList ?? [] };
         };
-        if (!token) {
+        if (!signedIn) {
           // Guest: conversations are never persisted — they live in memory for
           // this session only, so a reload starts clean. With no usable BYOK
           // provider on this browser, the server-provided platform model is
@@ -782,14 +778,15 @@ export default function App() {
         let me: MeResponse | null = null;
         let reachable = true;
         try {
-          me = await fetchMe(token, timeoutSignal(BOOT_FETCH_MS));
+          me = await fetchMe(timeoutSignal(BOOT_FETCH_MS));
         } catch {
           reachable = false;
         }
         if (cancelled) return;
         if (!me) {
-          // A token the server rejected is dropped; an unreachable one is kept.
-          if (reachable) clearAuthToken();
+          // A session the server rejected is dropped; an unreachable server
+          // keeps the hint for the next load.
+          if (reachable) clearSession();
           setAccount(null);
           setAccountState("guest");
           // Guests keep nothing on disk: start clean.
@@ -813,17 +810,17 @@ export default function App() {
           setNeedsUnlock(true);
           return;
         }
-        cloudRef.current = { token, key };
+        cloudRef.current = { key };
         // Adopt the profile only once its key exists: the stored apiKeys are
         // sealed, and the derived key is what opens them. With no profile (and
         // no legacy cookie) the account lands in platform mode instead of a form.
-        const mode = await adoptProvider(me.providers, token, key);
+        const mode = await adoptProvider(me.providers, key);
         await adoptAgents(me.agents, key);
         await adoptPlatform(mode === "none");
-        if (await proveAdminFrom(token, me.adminKey, key)) {
+        if (await proveAdminFrom(me.adminKey, key)) {
           setAccount((a) => (a ? { ...a, role: "admin" } : a));
         }
-        await adoptCloud(token, key, await loadLocal());
+        await adoptCloud(key, await loadLocal());
       } catch {
         // Never leave the app half-loaded (a blank screen): fall back to the
         // guest shell; the next load retries the session.
@@ -893,14 +890,14 @@ export default function App() {
   };
 
   /** Prove the account's stored admin key: the server sends a challenge, the client answers with the key, and only then does the session know it is an admin. The server stores no readable user type — only a one-way verifier — so this is the single moment it learns "admin" at all. */
-  const proveAdminFrom = async (token: string, sealed: string | null, key: CryptoKey | null): Promise<boolean> => {
+  const proveAdminFrom = async (sealed: string | null, key: CryptoKey | null): Promise<boolean> => {
     if (!sealed || !key) return false;
     const adminKey = await openSecret(key, sealed);
     // openSecret hands an unopenable value back unchanged; that is a failure.
     if (!adminKey || adminKey === sealed) return false;
-    const challenge = await fetchAdminChallenge(token);
+    const challenge = await fetchAdminChallenge();
     if (!challenge) return false;
-    return proveAdmin(token, challenge, adminKey);
+    return proveAdmin(challenge, adminKey);
   };
 
   /** The account's agents, sealed in its profile, restored over the workspace. Chat Kitsui keeps its saved setup when the provider it rides still exists; custom agents and the default come back as saved. */
@@ -922,7 +919,6 @@ export default function App() {
   /** Adopt a signed-in account's saved providers the moment we learn who they are. The server profile is authoritative: resume straight into a conversation from it. With none, the caller falls back to platform mode. */
   const adoptProvider = async (
     saved: SavedProvider[],
-    token: string,
     key: CryptoKey | null,
     keepGuest = false
   ): Promise<"profile" | "none"> => {
@@ -934,7 +930,7 @@ export default function App() {
       }
       setProfile(opened);
       // Profiles saved before provider ids existed get one now (one write; sealing is idempotent, so the stored keys ride along unchanged).
-      if (saved.some((p) => !p.id)) void saveProviders(token, opened, key);
+      if (saved.some((p) => !p.id)) void saveProviders(opened, key);
       setWorkspace((ws) => workspaceForByok(ws, opened));
       setGuest(opened[0] ? providerToGuest(opened[0]) : null);
       return "profile";
@@ -979,7 +975,7 @@ export default function App() {
           cloud.key,
         );
         if (!conv.upserts.length && !conv.deletes.length && !studio.upserts.length && !studio.deletes.length) return;
-        const ok = await syncStore(cloud.token, { conversations: conv, studios: studio });
+        const ok = await syncStore({ conversations: conv, studios: studio });
         if (!ok) return; // retried on the next change
         for (const c of conversations) syncedRef.current.conversations.set(String(c.id), JSON.stringify(c));
         for (const id of conv.deletes) syncedRef.current.conversations.delete(id);
@@ -1389,7 +1385,6 @@ export default function App() {
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
     user: AccountUser,
-    token: string,
     providers: SavedProvider[],
     accessKey: string,
     adminKey: string | null = null,
@@ -1399,8 +1394,8 @@ export default function App() {
     void (async () => {
       const key = await deriveEncKey(accessKey);
       await cacheKey(user.id, key);
-      writeAuthToken(token);
-      cloudRef.current = { token, key };
+      markSession();
+      cloudRef.current = { key };
       setNeedsUnlock(false);
       setAccount(user);
       setAccountState("user");
@@ -1408,25 +1403,24 @@ export default function App() {
       // A fresh account claims what the guest set up in this session (its providers and agents, sealed and uploaded). An existing profile is authoritative instead.
       const fresh = providers.length === 0 && agents === null;
       const claimed = providers.length === 0 ? claimGuestProviders(workspace) : [];
-      const mode = await adoptProvider(providers.length ? providers : claimed, token, key, fresh);
-      if (claimed.length) void saveProviders(token, claimed, key);
+      const mode = await adoptProvider(providers.length ? providers : claimed, key, fresh);
+      if (claimed.length) void saveProviders(claimed, key);
       if (agents) {
         await adoptAgents(agents, key);
       } else if (workspace.agents.some((a) => !a.builtIn)) {
         persistAgents(workspace.agents, workspace.activeAgentId);
       }
       await adoptPlatform(mode === "none");
-      if (await proveAdminFrom(token, adminKey, key)) {
+      if (await proveAdminFrom(adminKey, key)) {
         setAccount((a) => (a ? { ...a, role: "admin" } : a));
       }
-      await adoptCloud(token, key, { conversations, studios });
+      await adoptCloud(key, { conversations, studios });
     })();
   };
 
   const signOutUser = () => {
-    const token = readAuthToken();
-    if (token) void authSignout(token);
-    clearAuthToken();
+    void authSignout();
+    clearSession();
     // The record key leaves with the session: a shared machine must not keep another account's encrypted store readable after sign-out.
     if (account) void dropCachedKey(account.id);
     cloudRef.current = null;
@@ -1460,18 +1454,19 @@ export default function App() {
   /** Persist the account's BYOK providers where a resume can find them: the server profile (their keys sealed under the account key). */
   const persistProviders = (next: SavedProvider[]) => {
     setProfile(next);
-    const token = readAuthToken();
-    if (token) void saveProviders(token, next, cloudRef.current?.key ?? null);
+    // The ref is set only for a signed-in account whose key is unlocked, so a
+    // locked account never uploads unsealed provider keys.
+    const key = cloudRef.current?.key ?? null;
+    if (key) void saveProviders(next, key);
   };
 
   /** A signed-in account's agents travel with its profile, sealed. Guests keep theirs for the session only. */
   const persistAgents = (agents: Agent[], defaultAgentId: string | null) => {
-    const token = readAuthToken();
     const key = cloudRef.current?.key ?? null;
-    if (!token || !key) return;
+    if (!key) return;
     void (async () => {
       const sealed = await sealAgentsRecord(key, agents, defaultAgentId);
-      if (sealed) await saveAgentsRecord(token, sealed);
+      if (sealed) await saveAgentsRecord(sealed);
     })();
   };
 
@@ -1531,14 +1526,13 @@ export default function App() {
       right away. Returns true when the server accepted the proof. */
   const saveAdminKeyForAccount = async (rawKey: string): Promise<boolean> => {
     const accountKey = cloudRef.current?.key ?? null;
-    const token = readAuthToken();
     const trimmed = rawKey.trim();
-    if (!token || !accountKey || !trimmed) return false;
+    if (!accountKey || !trimmed) return false;
     const sealed = await sealSecret(accountKey, trimmed);
-    await saveAdminKey(token, sealed);
-    const ok = await proveAdminFrom(token, sealed, accountKey);
+    await saveAdminKey(sealed);
+    const ok = await proveAdminFrom(sealed, accountKey);
     // A key that does not prove is not kept around.
-    if (!ok) await saveAdminKey(token, null);
+    if (!ok) await saveAdminKey(null);
     setAccount((a) => (a ? { ...a, role: ok ? "admin" : undefined } : a));
     return ok;
   };

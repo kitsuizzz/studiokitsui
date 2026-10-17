@@ -32,9 +32,9 @@ export interface StoreSyncBody {
 }
 
 /** Every encrypted record the signed-in account owns, or null on failure. */
-export async function fetchStore(token: string): Promise<StoreSnapshot | null> {
+export async function fetchStore(): Promise<StoreSnapshot | null> {
   try {
-    const res = await fetch(`${APP_BASE}/auth/store`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${APP_BASE}/auth/store`);
     if (!res.ok) return null;
     const data: { conversations?: StoreRecord[]; studios?: StoreRecord[]; views?: StoreRecord[]; last?: StoreRecord[] } = await res.json();
     return {
@@ -51,11 +51,11 @@ export async function fetchStore(token: string): Promise<StoreSnapshot | null> {
 /** Apply a diff (upserts + deletes). Best-effort: a failure just retries on the
  *  next debounced save, since the client keeps the plaintext until it lands.
  *  `keepalive` lets the request outlive the page (used as the page is hidden). */
-export async function syncStore(token: string, body: StoreSyncBody, keepalive = false): Promise<boolean> {
+export async function syncStore(body: StoreSyncBody, keepalive = false): Promise<boolean> {
   try {
     const res = await fetch(`${APP_BASE}/auth/store/sync`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       keepalive,
     });
