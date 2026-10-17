@@ -3,6 +3,7 @@
 # secrets and machine-local settings
 .env
 .env.*
+!.env.example
 .opencode/
 *.key
 *.pem

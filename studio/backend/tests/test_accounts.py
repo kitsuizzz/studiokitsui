@@ -17,12 +17,13 @@ httpx.MockTransport (the dev install has no respx).
 
 import secrets
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pymysql
 import pytest
 
-from app import accounts, migrate_sqlite
+from app import accounts, config, migrate_sqlite
 from app.main import app
 
 
@@ -165,6 +166,8 @@ async def test_me_requires_a_valid_token(client):
     token = (await client.post("/auth/signup", json=signup_body(new_key()))).json()[
         "token"
     ]
+    # Sign-up sets the session cookie; clear it to test the guest's request.
+    client.cookies.clear()
     assert (await client.get("/auth/me")).status_code == 401
     assert (
         await client.get("/auth/me", headers=auth_headers("nope"))
@@ -305,7 +308,7 @@ async def test_migration_from_a_server_issued_key_database(client, db, tmp_path)
     )
     conn.execute(
         "INSERT INTO tokens (value, user_id, created_at) VALUES (?, ?, ?)",
-        ("legacy-token", 1, "2024-01-01T00:00:00+00:00"),
+        ("legacy-token", 1, accounts._now()),  # a live session (the TTL applies)
     )
     conn.execute(
         "INSERT INTO profiles (user_id, provider, updated_at) VALUES (?, ?, ?)",
@@ -927,7 +930,8 @@ async def test_promote_mints_a_key_and_a_challenge_proves_admin(client, capsys):
     ).status_code == 200
     me = await client.get("/auth/me", headers=auth_headers(token))
     assert me.json()["adminKey"] is None
-    # Nothing admin-shaped works without a session.
+    # Nothing admin-shaped works without a session (the cookie jar held one).
+    client.cookies.clear()
     assert (await client.post("/auth/admin/challenge")).status_code == 401
     assert (
         await client.post("/auth/admin/prove", json={"challenge": "x", "key": "y"})
@@ -1289,3 +1293,101 @@ async def test_last_session_record_is_its_own_collection(client):
     store = (await client.get("/auth/store", headers=headers)).json()
     assert store["last"] == []
     assert [c["blob"] for c in store["conversations"]] == ["CONVERSATION-1"]
+
+
+# --- the session cookie, the TTL, /auth/config, and the /v1 gate ------------
+
+
+async def test_signup_sets_the_httponly_session_cookie(client):
+    # The browser's session rides a cookie no page script can read; the JSON
+    # token is the API's own copy for CLIs and tests.
+    r = await client.post("/auth/signup", json=signup_body(new_key()))
+    assert r.status_code == 201
+    cookie = r.headers["set-cookie"]
+    assert cookie.startswith("aistudio.account=")
+    assert r.json()["token"] in cookie
+    assert "HttpOnly" in cookie
+    assert "SameSite=lax" in cookie
+    assert "Path=/" in cookie
+    assert "Max-Age=" in cookie
+    assert "Secure" not in cookie  # the suite speaks http
+
+
+async def test_the_cookie_is_secure_over_https(fake):
+    # A bridged request carries its true scheme; https sets Secure.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="https://test"
+    ) as https_client:
+        r = await https_client.post("/auth/signup", json=signup_body(new_key()))
+        assert "Secure" in r.headers["set-cookie"]
+
+
+async def test_signout_clears_the_session_cookie(client):
+    await client.post("/auth/signup", json=signup_body(new_key()))
+    r = await client.post("/auth/signout")
+    assert r.status_code == 200
+    cookie = r.headers["set-cookie"]
+    assert cookie.startswith("aistudio.account=")
+    assert "Max-Age=0" in cookie
+
+
+async def test_a_session_expires_after_the_ttl(client, db):
+    token = (await client.post("/auth/signup", json=signup_body(new_key()))).json()[
+        "token"
+    ]
+    old = (
+        datetime.now(timezone.utc)
+        - timedelta(days=config.settings.session_ttl_days + 1)
+    ).isoformat()
+    db.execute("UPDATE tokens SET created_at = %s WHERE value = %s", (old, token))
+    db.commit()
+    r = await client.get("/auth/me", headers=auth_headers(token))
+    assert r.status_code == 401
+    # The stale row is dropped, not left behind.
+    assert (
+        db.execute("SELECT 1 FROM tokens WHERE value = %s", (token,)).fetchone() is None
+    )
+
+
+async def test_auth_config_answers_the_signup_dialog(fake, client, monkeypatch):
+    monkeypatch.setattr(config.settings, "turnstile_mode", "test")
+    monkeypatch.setattr(config.settings, "turnstile_secret_key", "s")
+    monkeypatch.setattr(config.settings, "turnstile_site_key", "1x00000000000000000000AA")
+    r = await client.get("/auth/config")
+    assert r.status_code == 200
+    assert r.json() == {
+        "captcha": True,
+        "site_key": "1x00000000000000000000AA",
+        "session_days": config.settings.session_ttl_days,
+    }
+
+
+async def test_test_mode_only_accepts_its_own_tokens(fake, captcha_mode, client):
+    # A random string is not a test token: test mode is not a bypass.
+    captcha_mode("test")
+    r = await client.post(
+        "/auth/signup", json=signup_body(new_key(), captcha="anything-at-all")
+    )
+    assert r.status_code == 400
+    for token in ("XXXX.DUMMY.TOKEN.XXXX", "1x0000000000000000000000000000000AA"):
+        r = await client.post("/auth/signup", json=signup_body(new_key(), captcha=token))
+        assert r.status_code == 201, token
+
+
+async def test_the_gateway_requires_a_session(fake, client, monkeypatch):
+    # REQUIRE_SESSION (the fused app's default): /v1 — the platform model and
+    # its upstream key — belongs to signed-in accounts.
+    monkeypatch.setattr(config.settings, "gateway_token", "")
+    monkeypatch.setattr(config.settings, "require_session", True)
+    fake.set("GET", "/v1/models", json={"data": [{"id": "nova-4o"}]})
+
+    r = await client.get("/v1/models")
+    assert r.status_code == 401
+    assert r.json()["error"]["message"]
+    assert fake.requests == []  # the upstream is never called for a guest
+
+    # The session sign-up just set (its cookie) opens it.
+    await client.post("/auth/signup", json=signup_body(new_key()))
+    r = await client.get("/v1/models")
+    assert r.status_code == 200
+    assert r.json() == {"data": [{"id": "nova-4o"}]}

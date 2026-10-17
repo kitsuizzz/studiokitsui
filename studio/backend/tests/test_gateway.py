@@ -29,11 +29,12 @@ async def test_models_requires_valid_token(client, fake):
 
 
 async def test_open_gateway_needs_no_token(client, fake, monkeypatch):
-    # Unset GATEWAY_TOKEN = the app's open platform gateway: the browser
-    # (guests included) calls /v1 with no credential at all.
+    # Unset GATEWAY_TOKEN and REQUIRE_SESSION=0 = the open platform gateway:
+    # the browser (guests included) calls /v1 with no credential at all.
     from app import config
 
     monkeypatch.setattr(config.settings, "gateway_token", "")
+    monkeypatch.setattr(config.settings, "require_session", False)
     fake.set("GET", "/v1/models", json={"data": [{"id": "nova-4o"}]})
 
     r = await client.get("/v1/models")

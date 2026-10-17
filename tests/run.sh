@@ -43,6 +43,9 @@ $PY tests/chat_job_test.py >/tmp/nnstudio_chat_job.log 2>&1 && ok || { bad; tail
 step "brand (the logo, in both UIs)"
 $PY tests/brand_test.py >/tmp/nnstudio_brand.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_brand.log; }
 
+step "gateway bridge (in-process)"
+$PY tests/gateway_bridge_test.py >/tmp/nnstudio_gateway_bridge.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_gateway_bridge.log; }
+
 step "torch engine (the agent's)"
 $PY tests/nn_torch_test.py >/tmp/nnstudio_nn_torch.log 2>&1 && ok || { bad; tail -20 /tmp/nnstudio_nn_torch.log; }
 
@@ -82,7 +85,7 @@ PY
 [ $? -eq 0 ] && ok || bad
 
 step "py_compile"
-$PY -m py_compile nn_engine.py nn_server.py nn_arc.py nn_users.py tools/reverse_job.py tools/reverse_model.py tools/quant_bench.py tools/train_job.py tools/chat_job.py tools/backend_check.py agent/nnstudio_agent.py agent/nn_torch.py agent/nn_quant.py && ok || bad
+$PY -m py_compile nn_engine.py nn_server.py nn_gateway.py nn_arc.py nn_users.py tools/reverse_job.py tools/reverse_model.py tools/quant_bench.py tools/train_job.py tools/chat_job.py tools/backend_check.py agent/nnstudio_agent.py agent/nn_torch.py agent/nn_quant.py && ok || bad
 
 if [ "${1:-}" = "--live" ]; then
   step "live app"
@@ -94,12 +97,33 @@ if [ "${1:-}" = "--live" ]; then
   C=$(curl -s -m 10 localhost:8124/chat | head -c 40)
   case "$C" in *"<html"*) ok;; *) bad;; esac
 
-  step "live chat gateway (through the proxy)"
-  if curl -s -m 5 http://127.0.0.1:8000/healthz | grep -q '"ok":true'; then
-    P=$(curl -s -m 10 localhost:8124/chat/v1/models | head -c 40)
+  step "live chat gateway (in-process)"
+  H=$(curl -s -m 10 localhost:8124/chat/healthz | head -c 40)
+  case "$H" in *'"ok":true'*) ok;; *) bad;; esac
+
+  step "live chat account (signup -> session -> /v1)"
+  JAR=/tmp/nnstudio_live_jar.txt; rm -f $JAR
+  CRED=$(printf 'live-%s' "$(date +%s%N)" | shasum -a 256 | cut -d' ' -f1)
+  S=$(curl -s -m 10 -o /tmp/nnstudio_live_signup.json -w "%{http_code}" -c $JAR \
+      -X POST localhost:8124/chat/auth/signup -H 'Content-Type: application/json' \
+      -d "{\"credential\":\"$CRED\",\"handle\":\"live\",\"captcha\":\"XXXX.DUMMY.TOKEN.XXXX\"}")
+  G=$(curl -s -m 10 -o /dev/null -w "%{http_code}" localhost:8124/chat/v1/models)
+  P=$(curl -s -m 10 -b $JAR localhost:8124/chat/v1/models | head -c 40)
+  curl -s -m 10 -b $JAR -X POST localhost:8124/chat/auth/signout -o /dev/null
+  A=$(curl -s -m 10 -o /dev/null -w "%{http_code}" -b $JAR localhost:8124/chat/v1/models)
+  if [ "$S" = "201" ] && [ "$G" = "401" ] && [ "$A" = "401" ]; then
     case "$P" in *'"data"'*) ok;; *) bad;; esac
   else
-    echo "ok  (the gateway at :8000 is down — the SPA still serves)"
+    bad; echo "    signup=$S guest=$G after-signout=$A"; tail -2 /tmp/nnstudio_live_signup.json
+  fi
+
+  step "live gateway suite (needs MariaDB)"
+  if (cd studio/backend && ../../.venv/bin/python -m pytest -q >/tmp/nnstudio_gateway_suite.log 2>&1); then
+    ok
+  elif grep -q "MariaDB is not reachable" /tmp/nnstudio_gateway_suite.log; then
+    echo "ok  (MariaDB is down — the suite is skipped)"
+  else
+    bad; tail -20 /tmp/nnstudio_gateway_suite.log
   fi
 
   step "live agent + run"

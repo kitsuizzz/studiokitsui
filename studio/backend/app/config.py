@@ -28,11 +28,22 @@ Environment variables (or a .env file) drive the gateway:
                      mariadb service and passes the MARIADB_* values through.
 - TURNSTILE_MODE     off | test | live — the "I'm not a robot" check on
                      /auth/signup. "test" is the official Cloudflare test keys
-                     (any domain, every token passes — no account needed);
+                     (any domain, tokens pass against the test pair only);
                      "live" adds a hostname match so tokens can't be replayed
                      on other hosts. Off is the default (fully offline).
 - TURNSTILE_SECRET_KEY  The Turnstile secret key for the mode above. No secret
                      key means "off" no matter what the mode says.
+- TURNSTILE_SITE_KEY The widget's public site key, handed to the frontends by
+                     GET /auth/config (Studio Kitsui's Studio half asks for it;
+                     it is not a secret).
+- COOKIE_SECURE      Add "Secure" to the session cookie (set it when the app
+                     is served over https; a bridged https request sets it
+                     automatically).
+- SESSION_TTL_DAYS   How long a session token stays valid after sign-in.
+- REQUIRE_SESSION    The fused app's default: /v1 needs a signed-in session
+                     (the platform gateway is not open to the network).
+                     Unset GATEWAY_TOKEN for this to matter; set this to 0
+                     to keep the gateway open for guests (local dev).
 - SEARCH_PROVIDER    auto | searxng | duckduckgo — the keyless web-search backend
                      used by POST /v1/websearch. "auto" (default) prefers the
                      SearXNG instance when SEARXNG_URL is set, and falls back to
@@ -41,15 +52,25 @@ Environment variables (or a .env file) drive the gateway:
                      (the docker stack ships one). Empty = DuckDuckGo only.
 """
 
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The fused app's root: this file is studio/backend/app/config.py, so three
+# levels up is the repository — where the app's .env lives. Relative paths
+# would otherwise depend on the working directory (nn_server.py runs from the
+# root; pytest runs from studio/backend).
+_REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 
 class Settings(BaseSettings):
-    # Local dev (CWD=backend): this directory's .env, else the repo root's
-    # (docker compose values). pydantic-settings lets the LAST listed file win,
-    # so the more specific file is last. In containers no .env ships (it is
-    # docker-ignored) and environment variables take precedence over files.
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    # The repo root's .env first, a CWD-local one last (it wins). Environment
+    # variables always win over both.
+    model_config = SettingsConfigDict(
+        env_file=(os.path.join(_REPO_ROOT, ".env"), ".env"), extra="ignore"
+    )
 
     upstream_base_url: str = "http://127.0.0.1:9400/v1"
     upstream_api_key: str = ""
@@ -67,6 +88,13 @@ class Settings(BaseSettings):
     db_name: str = "aistudio"
     turnstile_mode: str = "off"
     turnstile_secret_key: str = ""
+    turnstile_site_key: str = ""
+    cookie_secure: bool = False
+    session_ttl_days: int = 30
+    # The fused app defaults to a session-gated gateway: /v1 is reachable on
+    # the network, so the platform model (and its upstream key) belongs to
+    # signed-in accounts. A GATEWAY_TOKEN, when set, takes over instead.
+    require_session: bool = True
     search_provider: str = "auto"
     searxng_url: str = ""
 

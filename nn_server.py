@@ -31,6 +31,7 @@ from urllib.parse import parse_qs, urlparse
 
 import nn_engine
 import nn_arc
+import nn_gateway              # the Chat half's gateway: the in-process bridge
 import nn_tasks                # agent_tasks: what the AI agents are doing
 import nn_users                # accounts, and the designs they save
 
@@ -55,13 +56,13 @@ AGENT_DIR = os.path.join(HERE, "agent")
 WEIGHTS_DIR = os.path.join(HERE, "weights")
 WEIGHT_EXTS = (".gguf", ".safetensors", ".pt", ".pth", ".bin")
 
-# The Studio half (chat.kitsui): its built SPA lives under studio/frontend/dist
-# and is served at /chat; the chat gateway is proxied, streamed, at /chat/v1
-# and /chat/auth. NNSTUDIO_STUDIO_WEB / NNSTUDIO_STUDIO_GATEWAY move those.
+# The Chat half (chat.kitsui): its built SPA lives under studio/frontend/dist
+# and is served at /chat. Its API — accounts, the E2E store, the OpenAI
+# pass-through — is the gateway (studio/backend/app), which runs inside this
+# very process behind nn_gateway's ASGI bridge: /chat/auth/*, /chat/v1/* and
+# /chat/healthz never leave the server. NNSTUDIO_STUDIO_WEB moves the SPA.
 STUDIO_WEB = os.path.abspath(os.environ.get("NNSTUDIO_STUDIO_WEB")
                              or os.path.join(HERE, "studio", "frontend", "dist"))
-STUDIO_GATEWAY = (os.environ.get("NNSTUDIO_STUDIO_GATEWAY")
-                  or "http://127.0.0.1:8000").rstrip("/")
 STUDIO_MIME = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
     ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -742,13 +743,15 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- the Studio half: chat.kitsui's app, served and proxied -------------
     def _studio(self, path):
-        """True when the path belongs to the chat app: its built files under
-        /chat, the gateway under /chat/v1 and /chat/auth (streamed through)."""
+        """True when the path belongs to the Chat half: its built files under
+        /chat, and its API — /chat/auth/*, /chat/v1/*, /chat/healthz — answered
+        in-process by the gateway behind nn_gateway's ASGI bridge."""
         if path in ("/chat", "/chat/"):
             self._studio_file(os.path.join(STUDIO_WEB, "index.html"))
             return True
-        if path.startswith("/chat/v1/") or path.startswith("/chat/auth/"):
-            self._studio_proxy(path[len("/chat"):])
+        if (path.startswith("/chat/v1/") or path.startswith("/chat/auth/")
+                or path == "/chat/healthz"):
+            self._studio_gateway(path[len("/chat"):])
             return True
         if path.startswith("/chat/"):
             rel = urllib.parse.unquote(path[len("/chat/"):])
@@ -774,58 +777,62 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, body, mime)
 
-    def _studio_proxy(self, upstream_path):
-        """The chat gateway, behind the app: status and headers relayed, the
-        body **streamed** — an SSE reply must never be buffered whole."""
-        import http.client
+    def _studio_gateway(self, upstream_path):
+        """The Chat half's API — /auth/*, /v1/*, /healthz — answered in-process
+        by the gateway (FastAPI) through nn_gateway's ASGI bridge. The reply is
+        streamed, so an SSE completion is never buffered whole; a client that
+        hangs up cancels the upstream call with it."""
         q = urlparse(self.path).query
-        target = upstream_path + (("?" + q) if q else "")
         try:
             n = int(self.headers.get("Content-Length") or 0)
         except (TypeError, ValueError):
             n = 0
-        body = self.rfile.read(n) if n > 0 else None
-        headers = {}
-        for k, v in self.headers.items():
-            low = k.lower()
-            if low in ("host", "connection", "content-length", "transfer-encoding",
-                       "accept-encoding"):          # hop-by-hop; the gateway re-does them
-                continue
-            headers[k] = v
-        headers.setdefault("X-Forwarded-For",
-                           self.client_address[0] if self.client_address else "127.0.0.1")
-        parts = urllib.parse.urlsplit(STUDIO_GATEWAY)
-        conn = None
+        body = self.rfile.read(n) if n > 0 else b""
+        headers = [(k, v) for k, v in self.headers.items()
+                   if k.lower() not in ("connection", "keep-alive", "host",
+                                        "transfer-encoding", "content-length",
+                                        "expect")]
+        headers.append(("X-Forwarded-For",
+                        self.client_address[0] if self.client_address else "127.0.0.1"))
+        if body:
+            headers.append(("Content-Length", str(len(body))))
+        scheme = "https" if isinstance(self.connection, ssl.SSLSocket) else "http"
+        answered = False
+        stream = None
         try:
-            conn = http.client.HTTPConnection(parts.hostname or "127.0.0.1",
-                                              parts.port or 80, timeout=900)
-            conn.request(self.command, target, body=body, headers=headers)
-            resp = conn.getresponse()
-            self.send_response(resp.status)
-            for k, v in resp.getheaders():
-                if k.lower() in ("connection", "transfer-encoding", "content-length",
-                                 "keep-alive"):
-                    continue                        # the length is the stream's
-                self.send_header(k, v)
-            self.send_header("Connection", "close")
-            self.end_headers()
-            self.close_connection = True
-            while True:
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                self.wfile.flush()
-        except Exception as e:  # noqa: BLE001 — the app shows the message
-            try:
-                self._json({"ok": False,
-                            "error": "the chat gateway is not reachable: %s" % e}, 502)
-            except Exception:  # noqa: BLE001 — headers may be out already
-                pass
-        finally:
-            if conn is not None:
+            stream = nn_gateway.bridge().request(
+                self.command, upstream_path, q, headers, body,
+                self.server.server_address, self.client_address, scheme)
+            for item in stream:
+                if item[0] == "start":
+                    answered = True
+                    self.send_response(item[1])
+                    for k, v in item[2]:
+                        name = k.decode("latin-1")
+                        if name.lower() in ("connection", "keep-alive",
+                                            "transfer-encoding", "content-length"):
+                            continue        # the body ends at the socket's close
+                        self.send_header(name, v.decode("latin-1"))
+                    self.send_header("Connection", "close")
+                    self.end_headers()
+                    self.close_connection = True
+                else:
+                    self.wfile.write(item[1])
+                    self.wfile.flush()
+        except nn_gateway.GatewayUnavailable as e:
+            if not answered:                # nothing sent yet: a clean answer
+                self._json({"ok": False, "error": str(e)}, 503)
+        except Exception as e:  # noqa: BLE001 — the app's own error, the app shows it
+            if not answered:
                 try:
-                    conn.close()
+                    self._json({"ok": False,
+                                "error": "the gateway failed (%s)" % e}, 502)
+                except Exception:  # noqa: BLE001 — headers may be out already
+                    pass
+        finally:
+            if stream is not None:
+                try:
+                    stream.close()          # the client is done: cancel the task
                 except Exception:  # noqa: BLE001
                     pass
 
@@ -1585,6 +1592,10 @@ def main():
         nn_tasks.reconcile()               # a task whose process is gone is done
     except Exception:  # noqa: BLE001 — the list repairs itself on read too
         pass
+    try:
+        nn_gateway.start()                 # the Chat half's gateway, this process
+    except nn_gateway.GatewayUnavailable as e:
+        print("nnstudio: the Chat half's gateway is down — %s" % (e,), flush=True)
     ctl = ControlServer((args.host, args.control_port), ControlHandler)
     threading.Thread(target=ctl.serve_forever, daemon=True,
                      name="nnstudio-control").start()

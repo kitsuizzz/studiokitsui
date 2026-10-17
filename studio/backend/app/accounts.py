@@ -6,6 +6,14 @@ gateway has no other state, so accounts live in a small MariaDB database
 store); docker compose ships the server, and the root .env carries its
 credentials.
 
+The session token rides an HttpOnly cookie (``aistudio.account``) that the
+server sets on sign-up and sign-in, so page scripts never hold the token; a
+client may also present it as ``Authorization: Bearer`` (CLIs, tests). A token
+is good for SESSION_TTL_DAYS after sign-in, then the client signs in again.
+That cookie is the session for BOTH halves of Studio Kitsui: the canvas
+(nn_server) and the Chat half share one origin, and this gateway is the only
+account system either of them has.
+
 Accounts are key-based, and the key is generated IN THE BROWSER: the client
 mints an access key (``ast_`` + 256 random bits), keeps it, and sends only a
 one-way credential — ``SHA-256(key)`` — to the server. The server stores
@@ -34,9 +42,10 @@ storage at rest, not inference.
 
 When the robot check is on (TURNSTILE_MODE != "off"), only sign-up is
 gated: it requires a Turnstile token in the "captcha" field and exchanges
-it with Cloudflare's siteverify endpoint before creating the account.
-Turnstile test-mode tokens (``XXXX.DUMMY.TOKEN.XXXX`` and the like) are
-accepted without the round-trip. Sign-in/out/me are never gated — a
+it with Cloudflare's siteverify endpoint before creating the account. In test
+mode only Cloudflare's documented test tokens (``XXXX.DUMMY.TOKEN.XXXX`` and
+the 1x/2x/3x family) are accepted, without the round-trip — any other string
+is refused like a failed check. Sign-in/out/me are never gated — a
 session token is proof of having passed the check at sign-up, and the
 credential is derived from 256 random bits, which no bot is going to guess.
 
@@ -64,7 +73,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 import pymysql
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from pymysql.connections import Connection
@@ -114,8 +123,15 @@ ROBOT_CHECK_UNAVAILABLE = (
 )
 
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
-# The token pattern Cloudflare documents for Turnstile's test mode.
+# The token patterns Cloudflare documents for Turnstile's test mode: the
+# literal dummy, and the 1x/2x/3x family (pass / fail / already-spent). In
+# test mode only these are accepted — a random string is not a test token.
 _TEST_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+_TEST_TOKEN_RE = re.compile(r"^[123]x[0-9A-Za-z]{20,}$")
+
+
+def _is_test_token(token: str) -> bool:
+    return token == _TEST_TOKEN or bool(_TEST_TOKEN_RE.match(token))
 
 # How long an admin challenge stays answerable. Single-use either way: the
 # first answer (right or wrong) consumes it.
@@ -173,6 +189,41 @@ def _hash_credential(credential: str) -> str:
 
 
 TOKEN_COOKIE = "aistudio.account"
+
+
+def _set_session_cookie(response: Response, token: str, request: Request) -> None:
+    """The session cookie the browser rides.
+
+    HttpOnly: the session token is never readable by page scripts, so a
+    cross-site script cannot exfiltrate it (the token in the JSON body is the
+    API's own copy, for CLIs and tests). SameSite=Lax: the cookie travels on
+    the app's own navigations and fetches, not from other sites. Secure: on
+    whenever the app is served over https — COOKIE_SECURE says so, or the
+    request itself arrived over https (a bridged request carries its scheme).
+    """
+    secure = config.settings.cookie_secure or request.url.scheme == "https"
+    response.set_cookie(
+        TOKEN_COOKIE,
+        token,
+        max_age=config.settings.session_ttl_days * 24 * 3600,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=secure,
+    )
+
+
+def _session_expired(created_at: str) -> bool:
+    """A session token is good for SESSION_TTL_DAYS after sign-in."""
+    try:
+        created = datetime.fromisoformat(created_at)
+    except ValueError:
+        return True
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - created > timedelta(
+        days=config.settings.session_ttl_days
+    )
 
 
 def _session_token(request: Request) -> str | None:
@@ -348,8 +399,12 @@ def _user_for_token(conn: _Db, request: Request) -> int:
     if not token:
         raise HTTPException(status_code=401, detail="Not signed in.")
     row = conn.execute(
-        "SELECT user_id FROM tokens WHERE value = %s", (token,)
+        "SELECT user_id, created_at FROM tokens WHERE value = %s", (token,)
     ).fetchone()
+    if row is not None and _session_expired(row[1]):
+        conn.execute("DELETE FROM tokens WHERE value = %s", (token,))
+        conn.commit()
+        row = None
     if row is None:
         raise HTTPException(
             status_code=401, detail="Session expired. Please sign in again."
@@ -357,6 +412,15 @@ def _user_for_token(conn: _Db, request: Request) -> int:
     # A session token is bound to exactly one account, so the only records a
     # client can ever reach are its own.
     return row[0]
+
+
+def require_session(request: Request) -> None:
+    """The /v1 gate: 401 unless a live session token rides the request."""
+    conn = _connect()
+    try:
+        _user_for_token(conn, request)
+    finally:
+        conn.close()
 
 
 #: The account's admin verifier. Unlike the E2E-sealed content, the server
@@ -523,7 +587,7 @@ class StoreSyncBody(BaseModel):
 
 
 @_router.post("/signup", status_code=201)
-async def signup(body: SignupBody, request: Request):
+async def signup(body: SignupBody, request: Request, response: Response):
     # The robot check gates sign-up only, and needs the request for the host
     # (live mode) and a network round-trip (hence the async handler). It runs
     # before the database is opened, so a bot never creates a row.
@@ -540,13 +604,16 @@ async def signup(body: SignupBody, request: Request):
     if not _HANDLE_RE.fullmatch(handle):
         raise HTTPException(status_code=400, detail="Malformed handle.")
     token, user_id = await run_in_threadpool(_create_account, credential, handle)
+    _set_session_cookie(response, token, request)
     # No key in the response: the client generated it and already has it, so
-    # the one-time reveal shows what the browser minted.
+    # the one-time reveal shows what the browser minted. The token itself also
+    # rides the body (the API's own copy, for CLIs and tests); the browser
+    # keeps the cookie instead.
     return {"token": token, "user": {"id": user_id, "name": handle}}
 
 
 @_router.post("/signin")
-def signin(body: SigninBody):
+def signin(body: SigninBody, request: Request, response: Response):
     # Sign-in is never robot-gated: the credential is derived from the access
     # key itself, and a session token is already proof of a check passed at
     # sign-up.
@@ -566,6 +633,7 @@ def signin(body: SigninBody):
         conn.commit()
     finally:
         conn.close()
+    _set_session_cookie(response, token, request)
     # The providers (with their keys) and the sealed agents ride along so the
     # client can resume straight into a conversation without a second /auth/me.
     return {
@@ -579,8 +647,9 @@ def signin(body: SigninBody):
 
 
 @_router.post("/signout")
-def signout(request: Request):
-    # The client clears its own cookie; the server just drops the session.
+def signout(request: Request, response: Response):
+    # Drop the session server-side and clear the cookie — HttpOnly means only
+    # the server can clear it.
     token = _session_token(request)
     if token:
         conn = _connect()
@@ -589,7 +658,20 @@ def signout(request: Request):
             conn.commit()
         finally:
             conn.close()
+    response.delete_cookie(TOKEN_COOKIE, path="/")
     return {"ok": True}
+
+
+@_router.get("/config")
+def auth_config():
+    """What a frontend needs to draw a sign-up dialog: whether the robot check
+    is on, the public site key (never the secret), and how long a session
+    lasts. No auth, no database — both halves of the app call it on boot."""
+    return {
+        "captcha": config.settings.captcha_enabled,
+        "site_key": config.settings.turnstile_site_key,
+        "session_days": config.settings.session_ttl_days,
+    }
 
 
 @_router.get("/me")
@@ -600,9 +682,13 @@ def me(request: Request):
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT u.id, u.name FROM users u JOIN tokens t ON t.user_id = u.id WHERE t.value = %s",
+            "SELECT u.id, u.name, t.created_at FROM users u JOIN tokens t ON t.user_id = u.id WHERE t.value = %s",
             (token,),
         ).fetchone()
+        if row is not None and _session_expired(row[2]):
+            conn.execute("DELETE FROM tokens WHERE value = %s", (token,))
+            conn.commit()
+            row = None
         providers = _get_providers(conn, row[0]) if row else []
         agents = _get_agents(conn, row[0]) if row else None
         admin_key = _admin_key_for(conn, row[0]) if row else None
@@ -827,7 +913,9 @@ async def _verify_captcha(token: str, request: Request) -> None:
     with the secret key and, in live mode, the request's public IP.
     """
     if config.settings.turnstile_mode == "test":
-        return
+        if _is_test_token(token):
+            return
+        raise HTTPException(status_code=400, detail=ROBOT_CHECK_FAILED)
     payload = {
         "secret": config.settings.turnstile_secret_key,
         "response": token,

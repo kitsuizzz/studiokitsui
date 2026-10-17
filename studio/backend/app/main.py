@@ -1,4 +1,9 @@
-"""chat.kitsui gateway: an OpenAI-compatible pass-through.
+"""The Chat half's gateway: the OpenAI pass-through and the accounts.
+
+This app runs inside nn_server.py's own process (see nn_gateway.py at the
+repository root): Studio Kitsui is one server, and /chat/v1/* + /chat/auth/*
+are answered here, in-process. It can still run standalone (uvicorn app.main:app
+from studio/backend) for the upstream deployment.
 
 The frontend speaks straight to the provider today; this gateway lets it speak
 to a same-origin /v1 instead. The real provider key lives here, server-side,
@@ -12,9 +17,10 @@ and every supported endpoint is forwarded upstream:
     POST /v1/websearch              (keyless web search for the agents' tools)
     POST /v1/webfetch               (SSRF-safe one-URL fetch, HTML→markdown)
 
-Plus a public GET /healthz for tooling, and an app-facing account API
-(/auth/signup, /auth/signin, /auth/signout, /auth/me — see accounts.py) that
-lets the browser sign in under a name instead of a raw API key.
+Plus a public GET /healthz for tooling, and the app-facing account API
+(/auth/signup, /auth/signin, /auth/signout, /auth/me, /auth/config, and the
+end-to-end encrypted store — see accounts.py). Both halves of Studio Kitsui
+sign in here: the session cookie is the one account.
 """
 
 import json
@@ -23,7 +29,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.middleware.cors import CORSMiddleware
@@ -45,14 +51,20 @@ class GatewayError(Exception):
 
 def require_token(request: Request) -> None:
     # A configured GATEWAY_TOKEN locks the gateway: external consumers and
-    # private deployments present it. Unset = the app's open platform gateway —
-    # no credential is required, because the browser (guests included) calls
-    # /v1 for the platform-provided model and the upstream key stays server-side.
-    if not config.settings.gateway_token:
+    # private deployments present it.
+    if config.settings.gateway_token:
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {config.settings.gateway_token}":
+            raise GatewayError(401, "Incorrect API key provided.")
         return
-    auth = request.headers.get("authorization", "")
-    if auth != f"Bearer {config.settings.gateway_token}":
-        raise GatewayError(401, "Incorrect API key provided.")
+    # Otherwise the fused app's default: the platform model (and the upstream
+    # key behind it) belongs to signed-in accounts. REQUIRE_SESSION=0 opens
+    # /v1 up to guests again — the pre-fusion behavior.
+    if config.settings.require_session:
+        try:
+            accounts.require_session(request)
+        except HTTPException:
+            raise GatewayError(401, "Sign in to use the platform gateway.")
 
 
 def openai_error(status_code: int, message: str) -> JSONResponse:
@@ -136,6 +148,11 @@ def create_app() -> FastAPI:
 
     @router.get("/models")
     async def list_models() -> StarletteResponse:
+        allow = config.settings.model_allowlist
+        if allow is not None and not allow:
+            # GATEWAY_MODELS=none: nothing is exposed, so nothing is asked of
+            # the upstream (which may not even be reachable from here).
+            return JSONResponse(status_code=200, content={"data": []})
         try:
             resp = await upstream.client().get(
                 upstream.url("/models"), headers=upstream.auth_headers()
@@ -145,7 +162,6 @@ def create_app() -> FastAPI:
         if resp.status_code != 200:
             return passthrough(resp)
         body = resp.json()
-        allow = config.settings.model_allowlist
         if allow is not None and isinstance(body.get("data"), list):
             body["data"] = [
                 m for m in body["data"] if isinstance(m, dict) and m.get("id") in allow
