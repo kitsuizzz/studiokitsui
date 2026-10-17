@@ -251,8 +251,9 @@ globalThis.__t = {
   bxTabClose, bxTabAnyDirty, bxTabLoad, bxSessionNow, bxSessionPush, bxSessionMatch,
   bxTabNewAI, bxTalkOn, bxTalkSend, bxTalkRender, bxTalkSync, bxTalkTask, bxTalkCurrent,
   bxHeadRefresh,
-  bxSessionRead, bxSessionRestore, bxAccountOpenApply, bxSplash, BXSESSION,
-  bxAccountSync, bxCanvases, bxCanvasRecords, bxKeyGet, bxKeyPut, bxKeyDrop,
+  bxSessionRestore, bxSessionStored, bxAccountOpenApply, bxSplash, BXSESSION,
+  bxAccountSync, bxCanvases, bxCanvasRecords, bxStoreRead,
+  bxKeyGet, bxKeyPut, bxKeyDrop,
   bxGGUFImport, bxGGUFImportApply, bxtVramToggle,
   bxCryptoReady, bxNewKey, bxHandle, bxCredential, bxDataKey, bxSealRecord, bxOpenRecord,
   bxSessionHint, bxSessionMark, bxSessionClear,
@@ -5014,14 +5015,7 @@ check("the + sits right beside the last tab, and its menu drops from it", () => 
   men.offsetWidth = keep.w;
 });
 
-check("the session remembers the saved tabs, in the browser", () => {
-  const store = {};                            // (an earlier check may have stubbed
-  const keepLS = global.localStorage;          // localStorage: give it back after)
-  global.localStorage = {
-    getItem: (k) => (k in store ? store[k] : null),
-    setItem: (k, v) => { store[k] = String(v); },
-    removeItem: (k) => { delete store[k]; },
-  };
+check("the session: the record it names, and the match to the store", () => {
   const keepId = __t.bxProject().id;
   __t.bxTabOpenSaved("alpha", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-a");
   const beta = __t.bxTabOpenSaved("beta", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-b");
@@ -5030,23 +5024,56 @@ check("the session remembers the saved tabs, in the browser", () => {
       { tabs: [{ id: "c-a", name: "alpha" }, { id: "c-b", name: "beta" }], active: null },
       "only the saved tabs ride, in their order, with the record they came from");
   __t.bxTabSelect(beta.id);
-  eql(__t.bxSessionNow().active, "c-b", "\u2026with the one on screen");
-  ok(store.nnstudio_session &&
-     JSON.parse(store.nnstudio_session).tabs.map(x => x.name).join(",") === "alpha,beta",
-     "the browser holds the session: " + store.nnstudio_session);
-  eql(__t.bxSessionRead().active, "c-b", "\u2026and reads it back");
+  eql(__t.bxSessionNow().active, "c-b", "…with the one on screen");
   // the match keeps the session's order and drops what is gone
   const rows = [{ id: "c-b" }, { id: "c-x" }, { id: "c-a" }];
   eql(__t.bxSessionMatch({ tabs: [{ id: "c-b" }, { id: "c-gone" }, { id: "c-a" }] }, rows),
       [rows[0], rows[2]],
-      "\u2026and a restore opens what still exists, in the saved order");
+      "…and a restore opens what still exists, in the saved order");
   // tidy: the boot tab is the one left, reloaded from its own stash
   __t.BX.projects = __t.BX.projects.filter(x => x.id === keepId);
   __t.BX.active = keepId;
   __t.bxTabLoad(__t.bxProject());
-  if (keepLS === undefined) delete global.localStorage;
-  else global.localStorage = keepLS;
   eql(__t.bxProject().id, keepId, "the canvas is left as it was found");
+});
+
+checkAsync("the session lands in the account's store, sealed", async () => {
+  // push: the record the backend keeps is ciphertext, and it opens with the key
+  const key = __t.bxNewKey();
+  const cryptoKey = await __t.bxDataKey(key);
+  const keepFetch = global.fetch;
+  let sent = null;
+  global.fetch = async (url, opts) => {
+    if (String(url) === "/chat/auth/store/sync") {
+      sent = JSON.parse(opts.body);
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key, locked: __t.BXACCT.locked };
+  const keepId = __t.bxProject().id;
+  __t.BXACCT.user = { id: "u-session" };
+  __t.BXACCT.key = cryptoKey;
+  __t.BXACCT.locked = false;
+  __t.bxTabOpenSaved("alpha", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-a");
+  await __t.bxSessionPush();
+  ok(sent && sent.session && sent.session.upserts.length === 1 &&
+     sent.conversations === undefined, "only the session delta rides");
+  const blob = sent.session.upserts[0].blob;
+  ok(String(blob).indexOf("alpha") < 0, "the record is ciphertext, not the names");
+  eql(await __t.bxOpenRecord(cryptoKey, "session|current", blob),
+      { tabs: [{ id: "c-a", name: "alpha" }], active: "c-a" },
+      "…and it opens with the account's key");
+  // tidy
+  __t.BX.projects = __t.BX.projects.filter(x => x.id === keepId);
+  __t.BX.active = keepId;
+  __t.bxTabLoad(__t.bxProject());
+  __t.BXACCT.user = keepAcct.user;
+  __t.BXACCT.key = keepAcct.key;
+  __t.BXACCT.locked = keepAcct.locked;
+  if (keepFetch === undefined) delete global.fetch;
+  else global.fetch = keepFetch;
+  __t.bxAccountSync();
 });
 
 check("the boot veil: only a remembered key waits behind it", async () => {
@@ -5073,7 +5100,7 @@ check("the boot veil: only a remembered key waits behind it", async () => {
 
 checkAsync("a session restore lands the saved canvases, with their content", async () => {
   // the real loop, end to end: a session and two designs, sealed for real,
-  // served by a stub — and the key coming from the shared IndexedDB cache
+  // served by a stub \u2014 the key comes from the shared IndexedDB cache
   const key = __t.bxNewKey();
   const cryptoKey = await __t.bxDataKey(key);
   const designA = { type: "canvas", version: 1,
@@ -5087,23 +5114,22 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
     blob: await __t.bxSealRecord(cryptoKey, "canvas|" + id, { name: name, design: design }),
     updatedAt: "2026-10-17T00:00:00+00:00",
   });
-  const rows = [await record("c-alpha", "alpha", designA),
-                await record("c-beta", "beta", designB)];
-  const session = { tabs: [{ id: "c-beta", name: "beta" }, { id: "c-alpha", name: "alpha" }],
-                    active: "c-alpha" };
-  const keepLS = global.localStorage;          // serial: every other check is done
-  const store = { nnstudio_session: JSON.stringify(session) };
-  global.localStorage = {
-    getItem: (k) => (k in store ? store[k] : null),
-    setItem: (k, v) => { store[k] = String(v); },
-    removeItem: (k) => { delete store[k]; },
+  const store = {
+    canvases: [await record("c-alpha", "alpha", designA),
+               await record("c-beta", "beta", designB)],
+    session: [{ id: "current",
+                blob: await __t.bxSealRecord(cryptoKey, "session|current",
+                  { tabs: [{ id: "c-beta", name: "beta" },
+                           { id: "c-alpha", name: "alpha" }],
+                    active: "c-alpha" }) }],
+    place: [],
   };
-  const keepFetch = global.fetch;
+  const keepFetch = global.fetch;              // serial: every other check is done
   global.fetch = async (url) => {
     const u = String(url);
     if (u.indexOf("/chat/auth/store") === 0)
-      return { ok: true, status: 200, json: async () => ({ canvases: rows }) };
-    return { ok: false, status: 404, json: async () => ({ detail: "no route " + u }) };
+      return { ok: true, status: 200, json: async () => store };
+    return { ok: false, status: 404, json: async () => ({}) };
   };
   const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key, locked: __t.BXACCT.locked };
   const keepRestored = __t.BXSESSION.restored;
@@ -5117,13 +5143,13 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
   boot.saved = false;
   boot.dirty = false;
   __t.bxTabsRender();
-  __t.bxSplash(true, "opening your canvases …");   // the boot veil, as on a reload
+  __t.bxSplash(true, "opening your canvases \u2026");   // the boot veil, as on a reload
   ok(getEl("bxsplash").hidden === false, "the veil is up while the session is on its way");
   await __t.bxKeyPut("u-session", cryptoKey);  // the device's cache, as a reload finds it
   await __t.bxAccountSignedIn({ id: "u-session", name: "tester" });
-  for (let i = 0; i < 300 &&                         // the restore's own promise
+  for (let i = 0; i < 300 &&                   // the restore's own promise chain,
        ((__t.BX.projects || []).length < 2 || getEl("bxsplash").hidden === false); i++)
-    await new Promise(r => setImmediate(r));         // chain, veil and all
+    await new Promise(r => setImmediate(r));   // veil and all
   ok((__t.BX.projects || []).length >= 2, "the restore opens the session's tabs");
   eql(getEl("bxsplash").hidden, true, "\u2026and the veil drops the moment they land");
   const names = (__t.BX.projects || []).map(p => p.name);
@@ -5141,7 +5167,7 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
   __t.bxTabSelect(alpha.id);
   ok(__t.BX.nodes.some(n => n.name === "alpha in"),
      "\u2026and back again, stashed and restored: " + __t.BX.nodes.map(n => n.name).join(","));
-  // tidy: the boot tab stepped aside (that is the feature) — land a fresh
+  // tidy: the boot tab stepped aside (that is the feature) \u2014 land a fresh
   // blank tab instead, the state a reload boots into
   __t.BX.projects = [];
   __t.BX.active = null;
@@ -5154,8 +5180,6 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
   __t.bxKeyDrop("u-session");
   if (keepFetch === undefined) delete global.fetch;
   else global.fetch = keepFetch;
-  if (keepLS === undefined) delete global.localStorage;
-  else global.localStorage = keepLS;
   __t.bxSplash(false);
 });
 
@@ -6274,10 +6298,9 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   eql([tab.name, tab.dirty], ["my canvas", false],
      "\u2026and the tab takes the name, star gone");
   ok(String(tab.canvas).indexOf("c_") === 0, "\u2026and the record id it was saved under");
-  const sync1 = server.sent.find(s => s.url === "/chat/auth/store/sync");
-  ok(sync1 && sync1.body.canvases.upserts.length === 1 &&
-     sync1.body.conversations === undefined,
-     "the save rides the canvases delta alone");
+  const sync1 = server.sent.find(s => s.url === "/chat/auth/store/sync" &&
+                                     s.body.canvases && s.body.canvases.upserts.length === 1);
+  ok(sync1, "the save rides the canvases delta alone");
   const row1 = server.rows[0];
   ok(!String(row1.blob).includes("my canvas"),
      "saving posts ciphertext only");
@@ -6356,26 +6379,38 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   eql(__t.BX.nodes.length, nodes0, "the canvas is left as it was found");
 });
 
-checkAsync("the landing: a first-visit guest is bounced to the welcome, once", async () => {
+checkAsync("the door: guests to the landing page, accounts to their place", async () => {
   const turn = () => new Promise(r => setImmediate(r));
   const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
   const keepLS = global.localStorage;
-  const store = {};
+  const hints = {};
   global.localStorage = {
-    getItem: (k) => (k in store ? store[k] : null),
-    setItem: (k, v) => { store[k] = String(v); },
-    removeItem: (k) => { delete store[k]; },
+    getItem: (k) => (k in hints ? hints[k] : null),
+    setItem: (k, v) => { hints[k] = String(v); },
+    removeItem: (k) => { delete hints[k]; },
   };
   const keepLoc = global.location;
-  global.location = { replaced: "", replace(u) { this.replaced = String(u); } };
+  global.location = { pathname: "/", replaced: "", replace(u) { this.replaced = String(u); } };
   const keepFetch = global.fetch;
-  const answer = (status, body) => ({ ok: status < 400, status: status, json: async () => body });
-  const guest = async (url) => {
-    const u = String(url);
+  const sent = [];
+  let me = null;
+  let place = "";
+  global.fetch = async (url, opts) => {
+    const u = String(url), method = (opts && opts.method) || "GET";
+    if (method === "POST" && opts && opts.body) {
+      try { sent.push({ url: u, body: JSON.parse(opts.body) }); } catch (e) {}
+    }
+    const reply = (status, body) => ({ ok: status < 400, status: status, json: async () => body });
     if (u === "/chat/auth/config")
-      return answer(200, { captcha: false, site_key: "", session_days: 30 });
-    if (u === "/chat/auth/me") return answer(401, { detail: "Not signed in." });
-    return answer(404, {});
+      return reply(200, { captcha: false, site_key: "", session_days: 30 });
+    if (u === "/chat/auth/me")
+      return me ? reply(200, { user: me }) : reply(401, { detail: "Not signed in." });
+    if (u === "/chat/auth/store")
+      return reply(200, { canvases: [], session: [],
+                          place: place ? [{ id: "current",
+                                            blob: JSON.stringify({ half: place }) }] : [] });
+    if (u === "/chat/auth/store/sync") return reply(200, { ok: true });
+    return reply(404, {});
   };
   const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key,
                      locked: __t.BXACCT.locked, known: __t.BXACCT.known };
@@ -6387,44 +6422,52 @@ checkAsync("the landing: a first-visit guest is bounced to the welcome, once", a
     __t.BXACCT.key = null;
     __t.BXACCT.locked = false;
   };
-  // 1. a first visit, a guest: the welcome is the front door
-  global.fetch = guest;
-  pristine();
-  __t.bxAccountLoad();
-  await flush();
-  eql(global.location.replaced, "/chat", "a first-visit guest lands on the welcome");
-  ok(store.nnstudio_landed === "1", "\u2026and the landing is marked");
-  // 2. the switch's Studio link: a guest who came to draw stays
+  // 1. a guest at the door: the landing page (the welcome), every time
+  me = null;
+  delete hints.nnstudio_account;
+  global.location.pathname = "/";
   global.location.replaced = "";
   pristine();
   __t.bxAccountLoad();
   await flush();
-  eql(global.location.replaced, "", "the switch's Studio link is not bounced again");
-  eql(getEl("bxuname").textContent, "guest", "\u2026the canvas is a guest's, as before");
-  // 3. a live session with no hint (the cookie outlived localStorage): the
-  //    canvas is home for a signed-in account
-  global.fetch = async (url) => {
-    const u = String(url);
-    if (u === "/chat/auth/config")
-      return answer(200, { captcha: false, site_key: "", session_days: 30 });
-    if (u === "/chat/auth/me") return answer(200, { user: { id: "u-live", name: "tester" } });
-    return answer(404, {});
-  };
-  delete store.nnstudio_landed;                // a fresh browser, but a live cookie
-  delete store.nnstudio_account;
+  eql(global.location.replaced, "/chat", "a guest at the door lands on the welcome");
+  // 2. the canvas itself never bounces a guest (the landing's Studio choice)
+  global.location.pathname = "/studio";
   global.location.replaced = "";
   pristine();
   __t.bxAccountLoad();
   await flush();
-  eql(global.location.replaced, "", "a live session keeps the canvas (no hint needed)");
-  // 4. the server unreachable: nobody is bounced on a guess
+  eql(global.location.replaced, "", "\u2026and /studio is the canvas, never a bounce");
+  eql(getEl("bxuname").textContent, "guest", "\u2026a guest's canvas, as before");
+  // 3. an account that left off in Chat: the door sends it back there
+  me = { id: "u-door", name: "tester" };
+  place = "chat";
+  global.location.pathname = "/";
+  global.location.replaced = "";
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "/chat", "an account that left off in Chat arrives there");
+  // 4. an account that left off in Studio: the canvas, and the place is written
+  place = "studio";
+  sent.length = 0;
+  global.location.pathname = "/";
+  global.location.replaced = "";
+  pristine();
+  __t.bxAccountLoad();
+  await flush();
+  eql(global.location.replaced, "", "an account that left off in Studio keeps the canvas");
+  const wrote = sent.find(x => x.body && x.body.place);
+  ok(wrote && JSON.parse(wrote.body.place.upserts[0].blob).half === "studio",
+     "\u2026and the canvas says where it is, for the next arrival");
+  // 5. the server unreachable: nobody is routed on a guess
   global.fetch = async () => { throw new Error("offline"); };
-  delete store.nnstudio_landed;
+  delete hints.nnstudio_account;
   global.location.replaced = "";
   pristine();
   __t.bxAccountLoad();
   await flush();
-  eql(global.location.replaced, "", "an unreachable server bounces nobody");
+  eql(global.location.replaced, "", "an unreachable server routes nobody");
   // tidy: the world goes back as it was
   __t.BXACCT.user = keepAcct.user;
   __t.BXACCT.key = keepAcct.key;

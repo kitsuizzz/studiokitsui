@@ -31,9 +31,13 @@ conversation on any device. (This is the one place the server holds
 provider keys — a deliberate, opt-in exception to the "the server never
 sees API keys" rule that otherwise governs guests.)
 
-The E2E store (/auth/store, /auth/store/sync) keeps conversations, studios
-and the canvas half's designs (`canvas` records) as opaque ciphertext blobs,
-encrypted client-side with a key derived from the access key. The server stores only the blobs (plus the
+The E2E store (/auth/store, /auth/store/sync) keeps conversations, studios,
+the canvas half's designs (`canvas` records) and its open tabs (`session`) as
+opaque ciphertext blobs, encrypted client-side with a key derived from the
+access key. One record is deliberately NOT sealed: `place` (id `current`),
+which names the half the account left off in, so an arrival can be routed to
+it even on a device that holds no key. It carries no content — just
+`{"half": "chat" | "studio"}` — and the server may read it. The server stores only the blobs (plus the
 account they belong to and a timestamp) and can never read them: the
 decryption key exists only in the browser that holds the access key.
 Metadata (record ids, counts, sizes, timestamps) is still visible to the
@@ -588,6 +592,15 @@ class StoreSyncBody(BaseModel):
     # the client's own id. (Chat's `studios` are its AI-built apps — a
     # different thing, and a different kind.)
     canvases: StoreDelta = Field(default_factory=StoreDelta)
+    # Where the account left off: one small record (`current`) naming the half
+    # in use — `{"half": "chat" | "studio"}` — so an arrival can be routed to
+    # it. The ONE record the app keeps unsealed: routing has to work on a
+    # device that holds no key yet, and "which half" is not content. The
+    # server can read it; it is metadata only.
+    place: StoreDelta = Field(default_factory=StoreDelta)
+    # The canvas half's open tabs (the sealed session: which saved canvases
+    # were open, and which one was on screen), one record (`current`).
+    session: StoreDelta = Field(default_factory=StoreDelta)
 
 
 @_router.post("/signup", status_code=201)
@@ -857,6 +870,8 @@ def get_store(request: Request):
     views: list[dict] = []
     last: list[dict] = []
     canvases: list[dict] = []
+    place: list[dict] = []
+    session: list[dict] = []
     for kind, rec_id, blob, updated_at in rows:
         item = {"id": rec_id, "blob": blob, "updatedAt": updated_at}
         if kind == "conversation":
@@ -869,12 +884,18 @@ def get_store(request: Request):
             last.append(item)
         elif kind == "canvas":
             canvases.append(item)
+        elif kind == "place":
+            place.append(item)
+        elif kind == "session":
+            session.append(item)
     return {
         "conversations": conversations,
         "studios": studios,
         "views": views,
         "last": last,
         "canvases": canvases,
+        "place": place,
+        "session": session,
     }
 
 
@@ -896,6 +917,8 @@ def sync_store(body: StoreSyncBody, request: Request):
             ("view", body.views),
             ("last", body.last),
             ("canvas", body.canvases),
+            ("place", body.place),
+            ("session", body.session),
         ):
             for rec in delta.upserts:
                 if not rec.id or not rec.blob:

@@ -818,7 +818,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if self._studio(path):
             return
-        if path in ("/", "/index.html"):
+        if path in ("/", "/index.html", "/studio", "/studio/"):
             try:
                 with open(UI, "rb") as f:
                     body = f.read()

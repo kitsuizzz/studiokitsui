@@ -140,6 +140,29 @@ await check("a canvas seals, syncs, and opens with the same key", async () => {
   need(refused, "the record is bound to its id");
 });
 
+await check("the place and the session ride the store too", async () => {
+  // the place: plaintext routing metadata, read back as such
+  const place = JSON.stringify({ half: "studio", at: new Date().toISOString() });
+  const session = await ui.bxSealRecord(recordKey, "session|current", {
+    tabs: [{ id: id, name: "live canvas" }],
+    active: id,
+  });
+  const res = await call("/chat/auth/store/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      place: { upserts: [{ id: "current", blob: place }], deletes: [] },
+      session: { upserts: [{ id: "current", blob: session }], deletes: [] },
+    }),
+  });
+  need(res.status === 200, "sync: " + res.status);
+  const store = await (await call("/chat/auth/store")).json();
+  need(JSON.parse(store.place[0].blob).half === "studio",
+       "the place reads back without a key \u2014 routing needs it first");
+  const sn = await ui.bxOpenRecord(recordKey, "session|current", store.session[0].blob);
+  need(sn.tabs.length === 1 && sn.active === id, "the session opens with the key");
+});
+
 await check("sign-out drops the session, and the store refuses a guest", async () => {
   const out = await call("/chat/auth/signout", { method: "POST" });
   need(out.status === 200, "signout: " + out.status);

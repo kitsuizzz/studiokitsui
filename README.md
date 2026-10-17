@@ -17,9 +17,13 @@ The top bar carries the switch. **Studio** is the canvas, at `/` — everything
 this README describes. **Chat** is AI Studio (chat.kitsui) at `/chat`: the
 conversation app with agents, providers, web tools and the studio builder.
 
-A guest's first visit to `/` lands on the Chat half's welcome — the app's
-front door for guests (Create an account, or Continue as guest) — and the
-switch's Studio link then keeps them on the canvas.
+The front door is `/`, and it routes by who is arriving: a **guest** always
+lands on the landing page — the Chat half's welcome, with Chat (Continue as
+guest), Studio, and Create an account all a click away — while an **account**
+always lands wherever it left off last time, which is the `place` record in
+its store: on the backend, so it follows the account to any device. `/studio`
+is the canvas itself and never bounces; the switch's links are `/chat` and
+`/studio`.
 
 They are one app on one origin and **one server**: `./run.sh` is the whole
 thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
@@ -86,14 +90,17 @@ first when it holds unsaved changes; a reload or close with unsaved tabs asks
 too). The last tab wears no `×` — there is always one tab open. **AI agent**
 opens a tab that is not a canvas: the reverse-engineering agent, spoken to
 (see **The AI agent tab** below). The canvas tabs you leave open come back on
-your next visit — the browser keeps that list (`nnstudio_session`) — and the
-canvases themselves live in the account's encrypted store, so another device
-that signs in and unlocks gets the same designs (the AI tab is a conversation,
-not a canvas, so it is not restored).
+your next visit — the list of them (with the one that was on screen) is the
+account's sealed `session` record in its store, on the backend like everything
+else, so any device that signs in and unlocks lands exactly where the account
+left off (the AI tab is a conversation, not a canvas, so it is not restored).
 
 A canvas is one `canvas` record in the account's **end-to-end encrypted
 store** — the same store the Chat half keeps its conversations and studios in
-(MariaDB, `e2e_records`). The payload is sealed with AES-GCM under the record
+(MariaDB, `e2e_records`), along with the `session` record above. One record is
+deliberately *not* sealed: `place`, which names the half the account last used
+(`{"half": "chat" | "studio"}`) — routing has to work on a device that holds no
+key yet, and "which half" is metadata, not content. The payload is sealed with AES-GCM under the record
 key *and bound to the record's id* (additional data), so a canvas cannot be
 swapped into another record's slot. The server holds ciphertext and metadata
 only: that an account exists, how many records it has, their sizes and

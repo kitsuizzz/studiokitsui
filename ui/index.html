@@ -8249,22 +8249,45 @@ function bxSessionMark() {
 function bxSessionClear() {
   try { localStorage.removeItem("nnstudio_account"); } catch (e) {}
 }
-// The landing page (the Chat half's welcome) is the app's front door for
-// guests: the first visit to / that turns out to be a guest is landed there,
-// and the marker the Chat half sets on boot makes the switch's Studio link
-// stick afterwards — a guest who came to draw stays on the canvas.
-function bxLandingSeen() {
-  try { return localStorage.getItem("nnstudio_landed") === "1"; } catch (e) { return false; }
+// The flow, in one place:
+//
+//   guests   always arrive on the landing page (the Chat half's welcome),
+//            where Chat and Studio are both a click away — so this page, when
+//            it is the front door (`/`), sends every guest there;
+//   accounts always arrive wherever they left off last time, which is the
+//            account's own `place` record in its store — on the backend, so
+//            it follows the account to any device. The one record the app
+//            keeps unsealed: routing must work before a key is entered, and
+//            "which half" is metadata, not content.
+//
+// `location.pathname` decides: `/` (and `/index.html`) is the door and routes;
+// `/studio` is the canvas itself and never bounces (the landing's Studio
+// choice, and the switch's Studio link, both land there).
+function bxAtDoor() {
+  if (typeof location === "undefined" || !location.pathname) return true;
+  const p = String(location.pathname);
+  return p === "/" || p === "/index.html";
 }
-function bxLandingMark() {
-  try { localStorage.setItem("nnstudio_landed", "1"); } catch (e) {}
+function bxGo(path) {
+  if (typeof location !== "undefined" && location.replace) location.replace(path);
 }
-function bxLand() {                            // the one bounce per browser
-  if (bxLandingSeen() || BXACCT.user) return false;   // signed in: the canvas is home
-  bxLandingMark();                             // marked even if the bounce is
-  if (typeof location !== "undefined" && location.replace)   // blocked: no loop
-    location.replace("/chat");
-  return true;
+function bxPlaceRow(rows) {                    // {"half": "chat"|"studio"} from the store
+  const row = (rows || []).find(r => r.id === "current");
+  if (!row) return "";
+  try {
+    const v = JSON.parse(String(row.blob || ""));
+    return String((v && v.half) || "");
+  } catch (e) {
+    return "";
+  }
+}
+function bxPlaceNow(half) {                    // where this account is, for the backend
+  if (typeof fetch !== "function" || !BXACCT.user) return;
+  const blob = JSON.stringify({ half: half, at: new Date().toISOString() });
+  fetch("/chat/auth/store/sync", { method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ place: { upserts: [{ id: "current", blob: blob }], deletes: [] } }) })
+    .catch(() => {});                          // best-effort: never blocks the app
 }
 function bxNewKey() {                          // the access key the browser mints
   const bytes = new Uint8Array(32);
@@ -8381,12 +8404,12 @@ function bxSplash(show, note) {                // the boot veil: up while the
   }
   el.hidden = !show;
 }
-function bxAccountLoad() {                     // who is this, and what does the check need
+function bxAccountLoad() {                     // who is this, and where do they belong
   try { localStorage.removeItem("nnstudio_token"); } catch (e) {}   // the old root token
-  if (typeof fetch !== "function") {           // no server to ask: a guest, and that is that
+  if (typeof fetch !== "function") {           // no server to ask: a guest, that is that
     BXACCT.known = true;
     bxAccountSync();
-    bxLand();
+    if (bxAtDoor()) bxGo("/chat");             // guests arrive on the landing page
     return;
   }
   // the sign-up dialog's needs (the robot check and its public site key)
@@ -8395,21 +8418,21 @@ function bxAccountLoad() {                     // who is this, and what does the
     BXACCT.site = d.site_key || "";
     BXACCT.captcha = !!d.captcha;
   }).catch(() => {});
-  if (!bxSessionHint() && bxLandingSeen()) {   // a guest, landed once already
+  if (!bxSessionHint() && !bxAtDoor()) {       // the canvas, no session to ask about
     BXACCT.known = true;
     bxAccountSync();
     return;
   }
-  // A first visit (no landing yet) asks the server, so a guest is landed on
-  // the welcome while a signed-in account — a live cookie with no hint — keeps
-  // the canvas. An unreachable server bounces nobody.
+  // The door asks the server (a live cookie may have no hint): a guest is sent
+  // to the landing page, an account to the half it left off in. An unreachable
+  // server routes nobody.
   fetch("/chat/auth/me").then(r => r.json().then(d => ({ ok: r.ok, d: d })))
     .then(({ ok, d }) => {
       BXACCT.known = true;
       if (!ok || !d || !d.user) {              // the hint outlived the session
         bxSessionClear();
         bxAccountSync();
-        bxLand();
+        if (bxAtDoor()) bxGo("/chat");         // a guest: the landing page is the door
         return;
       }
       return bxAccountSignedIn(d.user);        // the key comes from the cache
@@ -8426,6 +8449,20 @@ async function bxAccountSignedIn(user) {
     try { BXACCT.key = await bxKeyGet(BXACCT.user.id); } catch (e) {}
   }
   BXACCT.locked = !!BXACCT.user && !BXACCT.key;
+  if (BXACCT.user && bxAtDoor()) {
+    // An account arrives wherever it left off: the backend's place record
+    // decides, and the canvas is both the fallback and the answer when the
+    // record cannot be read.
+    let half = "";
+    try {
+      const store = await bxStoreRead();
+      half = bxPlaceRow((store || {}).place);
+    } catch (e) {}
+    if (half === "chat") { bxGo("/chat"); return; }
+    bxPlaceNow("studio");                      // the door resolved to the canvas
+  } else if (BXACCT.user) {
+    bxPlaceNow("studio");                      // the canvas: this is where we are
+  }
   bxAccountSync();
   if (!BXSESSION.restored) {                   // the tabs come back where they
     BXSESSION.restored = true;                 // were — once per page
@@ -8793,13 +8830,15 @@ function bxAccountSaveForm(onSaved, given) {
   bxAccountPlace();
   return true;
 }
-async function bxCanvasRecords() {             // the raw `canvas` rows: id + ciphertext
-  if (typeof fetch !== "function" || !BXACCT.user) return [];   // the key is not
-                                                 // needed to fetch — only to open
+async function bxStoreRead() {                 // every record the account owns
+  if (typeof fetch !== "function" || !BXACCT.user) return null;
   const r = await fetch("/chat/auth/store");
   if (!r.ok) throw new Error("the store could not be read (HTTP " + r.status + ")");
-  const d = await r.json();
-  return Array.isArray(d && d.canvases) ? d.canvases : [];
+  return await r.json();
+}
+async function bxCanvasRecords() {             // the raw `canvas` rows: id + ciphertext
+  const store = await bxStoreRead();           // the key is not needed to fetch
+  return Array.isArray(store && store.canvases) ? store.canvases : [];
 }
 async function bxCanvases() {                  // the list, decrypted: name + design
   const rows = await bxCanvasRecords();
@@ -8954,20 +8993,32 @@ function bxSessionNow() {
   return { tabs: tabs,
            active: act && act.saved && act.canvas ? act.canvas : null };
 }
-function bxSessionStore(sn) {
-  try { localStorage.setItem("nnstudio_session", JSON.stringify(sn)); } catch (e) {}
+async function bxSessionPush() {               // after every open, close, switch,
+  if (BXSESSION.hold) return false;            // save: which saved canvases were
+  if (!BXACCT.user || !BXACCT.key) return true;   // open, and which one was on
+  const sn = bxSessionNow();                   // screen, lands in the account's
+  try {                                        // store — sealed, and on the
+    const blob = await bxSealRecord(BXACCT.key, "session|current", sn);
+    await fetch("/chat/auth/store/sync", {     // backend, so any device that
+      method: "POST",                          // signs in lands where the
+      headers: { "Content-Type": "application/json" },   // account left off
+      body: JSON.stringify({ session: { upserts: [{ id: "current", blob: blob }], deletes: [] } }),
+    });
+  } catch (e) {}
+  return true;
 }
-function bxSessionRead() {
+async function bxSessionStored() {             // the sealed session, or null
+  if (!BXACCT.user || !BXACCT.key) return null;
   try {
-    const sn = JSON.parse(localStorage.getItem("nnstudio_session") || "null");
+    const store = await bxStoreRead();
+    const row = (((store || {}).session) || []).find(r => r.id === "current");
+    if (!row) return null;
+    const sn = await bxOpenRecord(BXACCT.key, "session|current", row.blob);
     return sn && typeof sn === "object" ? sn : null;
-  } catch (e) { return null; }
+  } catch (e) {
+    return null;                               // unreadable: no tabs to bring back
+  }
 }
-function bxSessionPush() {                     // after every open, close, switch,
-  if (BXSESSION.hold) return false;            // save: the screen's tab set lands
-  bxSessionStore(bxSessionNow());              // in this browser. The canvases
-  return true;                                 // themselves live in the account's
-}                                              // store, so nothing is posted here.
 function bxSessionMatch(sn, rows) {            // the session's tabs, still saved
   const out = [];
   for (const t of (sn && sn.tabs) || []) {
@@ -8978,8 +9029,8 @@ function bxSessionMatch(sn, rows) {            // the session's tabs, still save
 }
 async function bxSessionRestore() {            // at sign-in: open what was open
   if (!BXACCT.user || !BXACCT.key) return false;
-  const sn = bxSessionRead();                  // this browser's own memory
-  if (!sn) return false;
+  const sn = await bxSessionStored();          // the account's own record
+  if (!sn || !sn.tabs || !sn.tabs.length) return false;
   let rows = [];
   try { rows = await bxCanvases(); } catch (e) { return false; }
   const want = bxSessionMatch(sn, rows);
@@ -10473,8 +10524,8 @@ function bxtInit() {
   bxtDropsClose();                             // all menus start closed
   bxtRefresh();
   bxAccountSync();                             // the tool strip already says guest
-  bxSplash(bxSessionHint() || !bxLandingSeen(),  // a live session — or a first
-           "opening your canvases \u2026");      // visit, which may land elsewhere —
+  bxSplash(bxSessionHint() || bxAtDoor(),      // a live session — or the door,
+           "opening your canvases \u2026");      // which may land elsewhere —
   bxAccountLoad();                             // and the server says who it is
   if (typeof setTimeout === "function")        // bring saved tabs back: hold the veil,
     setTimeout(() => bxSplash(false), 6000);   // but never longer than a breath

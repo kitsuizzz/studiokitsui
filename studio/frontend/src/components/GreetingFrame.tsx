@@ -36,6 +36,8 @@ interface GreetingFrameProps {
   onNewSession?: () => void;
   /** Open the auth dialog (the brain's "Create an account" / "Sign up" buttons). */
   onOpenAuth?: (mode: "signin" | "signup") => void;
+  /** The landing page's third door: the canvas half (the brain's "Studio"). */
+  onOpenStudio?: () => void;
   /** The host's account state; the brain uses it to skip the choice step. */
   signedIn?: boolean;
 }
@@ -47,13 +49,14 @@ interface GreetingFrameProps {
  * the persistent head and the per-step body — and relays the brain's
  * `ai.host` / `ai.fetch` calls to the app.
  */
-export default function GreetingFrame({ onStart, onModelChange, onNewSession, onFirstMessage, composer, source, guest, platform, canStart, onOpenAuth, signedIn }: GreetingFrameProps) {
+export default function GreetingFrame({ onStart, onModelChange, onNewSession, onFirstMessage, composer, source, guest, platform, canStart, onOpenAuth, onOpenStudio, signedIn }: GreetingFrameProps) {
   const onHost = (action: string, arg?: unknown) => {
     if (action === "start") onStart(arg as GuestStart);
     else if (action === "model-change") onModelChange?.(arg as string);
     else if (action === "new-session") onNewSession?.();
     else if (action === "first-message") onFirstMessage?.(arg as string);
     else if (action === "auth") onOpenAuth?.(arg as "signin" | "signup");
+    else if (action === "studio") onOpenStudio?.();
   };
 
   // The whitelisted host capabilities the brain may call across the bridge.

@@ -145,7 +145,8 @@ function render() {
     body = mkGroup("greeting-prompt", "choice", [
       mkGroup("greeting-actions", null, [
         btn("Create an account", "signup", false, false),
-        btn("Continue as guest", "provider", true, false)
+        btn("Continue as guest", "provider", true, false),
+        btn("Studio", "studio", true, false)
       ])
     ]);
   } else if (step === "provider") {
@@ -255,6 +256,7 @@ ai.on("click", function (arg, blockType) {
     // Both account buttons delegate to the host's one-click sign-up dialog; the
     // brain stays put and the host advances it (choice -> provider) on confirm.
     if (arg === "Create an account" || arg === "Sign up") { ai.host("auth", "signup"); }
+    else if (arg === "Studio") { ai.host("studio"); }
     else if (arg === "Continue as guest") {
       // With a usable provider (platform or a saved BYOK setup) the host hands
       // the guest straight to a new session; otherwise the BYOK form is the

@@ -33,7 +33,6 @@ import {
   fetchMe,
   type MeResponse,
   guestToProvider,
-  markLanded,
   markSession,
   proveAdmin,
   providerToGuest,
@@ -45,7 +44,7 @@ import {
 } from "./lib/auth";
 import { decryptJson, deriveEncKey, encryptJson, openSecret, sealSecret } from "./lib/crypto";
 import { cacheKey, dropCachedKey, getCachedKey } from "./lib/keyvault";
-import { fetchStore, syncStore, type StoreRecord } from "./lib/cloud";
+import { fetchStore, savePlace, syncStore, type StoreRecord } from "./lib/cloud";
 import { type ReadingSpot } from "./components/readingSpot";
 import { parseStudioBlock, splitStudioBlock, builderPrompt, builderEditPrompt, planPrompt, criticPrompt, workspaceReviewPrompt } from "./lib/studio";
 import { captureStudioSet } from "./lib/capture";
@@ -751,10 +750,6 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const signedIn = sessionHint();
-    // This welcome is the app's front door for guests: mark it served, so the
-    // canvas half lands a first-visit guest here (and never bounces the
-    // switch's Studio link afterwards).
-    markLanded();
     // A guest's providers are session-only; purge the legacy cookie so an old
     // build's write can never resurrect one.
     if (!signedIn) clearGuestSession();
@@ -801,6 +796,8 @@ export default function App() {
         }
         setAccount(me.user);
         setAccountState("user");
+        // Where the account is, for the door (backend-side): Chat.
+        void savePlace("chat");
         const key = await getCachedKey(me.user.id);
         if (cancelled) return;
         if (!key) {
@@ -1404,6 +1401,7 @@ export default function App() {
       setNeedsUnlock(false);
       setAccount(user);
       setAccountState("user");
+      void savePlace("chat");                  // the door routes arrivals here
       onboardedThisSessionRef.current = false;
       // A fresh account claims what the guest set up in this session (its providers and agents, sealed and uploaded). An existing profile is authoritative instead.
       const fresh = providers.length === 0 && agents === null;
@@ -3203,6 +3201,7 @@ export default function App() {
               onFirstMessage={(t) => void send(t, [])}
               source={effectiveSource("greeting", appOverrides)}
               onOpenAuth={(mode) => setAuthMode(mode)}
+              onOpenStudio={() => { window.location.href = "/studio"; }}
               signedIn={accountState === "user"}
               composer={{
                 onSend: send,

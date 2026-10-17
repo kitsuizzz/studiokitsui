@@ -25,10 +25,26 @@ export interface StoreDelta {
 }
 
 export interface StoreSyncBody {
-  conversations: StoreDelta;
-  studios: StoreDelta;
+  conversations?: StoreDelta;
+  studios?: StoreDelta;
   views?: StoreDelta;
   last?: StoreDelta;
+  /** Where the account is (`{"half": "chat" | "studio"}`) — the one record
+      the app keeps unsealed, so the door can route an arrival before a key
+      is entered. */
+  place?: StoreDelta;
+  /** The canvas half's open tabs (it writes this; Chat only reads its own). */
+  session?: StoreDelta;
+}
+
+/** Where the account is, for the backend: the door routes an arrival to it. */
+export async function savePlace(half: "chat" | "studio"): Promise<void> {
+  await syncStore({
+    place: {
+      upserts: [{ id: "current", blob: JSON.stringify({ half, at: new Date().toISOString() }) }],
+      deletes: [],
+    },
+  });
 }
 
 /** Every encrypted record the signed-in account owns, or null on failure. */

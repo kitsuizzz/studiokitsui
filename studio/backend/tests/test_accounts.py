@@ -1055,6 +1055,8 @@ async def test_store_sync_roundtrip_upsert_and_delete(client):
         "views": [],
         "last": [],
         "canvases": [],
+        "place": [],
+        "session": [],
     }
     # An upsert lands verbatim (the blob is opaque to the server).
     r = await client.post(
@@ -1428,3 +1430,29 @@ async def test_the_store_carries_canvases_without_touching_the_rest(client):
     await client.post("/auth/signout")
     r = await client.get("/auth/store")
     assert r.status_code == 401
+
+
+async def test_the_place_and_the_session_ride_the_same_store(client):
+    # `place` names the half the account left off in: the ONE record the
+    # server may read, because routing has to work before a key is entered.
+    # The canvas half's open tabs (`session`) are opaque, like everything else.
+    await client.post("/auth/signup", json=signup_body(new_key()))
+    r = await client.post(
+        "/auth/store/sync",
+        json={
+            "place": {"upserts": [{"id": "current", "blob": '{"half": "studio"}'}]},
+            "session": {"upserts": [{"id": "current", "blob": "SEALED-TABS"}]},
+        },
+    )
+    assert r.status_code == 200
+    store = (await client.get("/auth/store")).json()
+    assert [p["blob"] for p in store["place"]] == ['{"half": "studio"}']
+    assert [s["blob"] for s in store["session"]] == ["SEALED-TABS"]
+
+    # A later sync that only names the place leaves the session alone.
+    await client.post(
+        "/auth/store/sync", json={"place": {"upserts": [], "deletes": ["current"]}}
+    )
+    store = (await client.get("/auth/store")).json()
+    assert store["place"] == []
+    assert [s["blob"] for s in store["session"]] == ["SEALED-TABS"]
