@@ -5,13 +5,13 @@
  * host), the greeting brain is self-driven: it runs the title typewriter and
  * owns the onboarding state — the one choice step. It talks to the host only
  * through the bridge: `ai.render` (blocks), `ai.on` (user events) and
- * `ai.host` (new-session / settings / auth).
+ * `ai.host` (new-session / auth).
  *
  * The welcome is the choice and nothing else: it carries no provider form.
- * "Continue as guest" emits `ai.host("new-session")` when the host reports a
- * usable provider (the platform gateway, or one added in Settings), and
- * `ai.host("settings")` otherwise — Settings' provider box is where a model
- * gets added, and the button goes live (new-session) once one is there.
+ * "Continue as guest" always emits `ai.host("new-session")` — the door into
+ * a fresh session, even when no model is configured yet. In that case the
+ * host shows a warning dialog on the way in, and a send that goes ahead
+ * anyway bounces back in the wall as the same note, in red.
  *
  * Account creation is the host's job, not the brain's: "Create an account"
  * calls `ai.host("auth", "signup")` to open the host's one-click sign-up
@@ -38,10 +38,6 @@ var typed = "";
 var typeTimer = null;
 var booted = false;
 var bootTimer = null;
-// The host's verdict: a usable provider already exists (the platform gateway,
-// or one added in Settings), so "Continue as guest" can start a session
-// instead of opening Settings.
-var canStart = false;
 // The host's account state: a signed-in user has no account to create.
 var signedIn = false;
 
@@ -77,7 +73,8 @@ function render() {
   var head = { type: "greetinghead", title: typed, sub: SUBTITLE };
   var actions = [];
   // A signed-in user has no account to create; for them the choice step is
-  // only the door into a session (and, with no provider yet, into Settings).
+  // only the door into a session (with no model yet, the host warns and
+  // points to Settings on the way in).
   if (!signedIn) actions.push(btn("Create an account", "signup", false, false));
   actions.push(btn("Continue as guest", "chat", true, false));
   var body = mkGroup("greeting-prompt", "choice", [
@@ -116,18 +113,15 @@ ai.on("click", function (arg, blockType) {
   // brain stays put and re-renders when the host confirms an account exists.
   if (arg === "Create an account") { ai.host("auth", "signup"); }
   else if (arg === "Continue as guest") {
-    // With a usable provider the host hands the guest straight to a new
-    // session; without one, Settings' provider box is where the model comes
-    // from (the button goes live once one is added there).
-    if (canStart) ai.host("new-session");
-    else ai.host("settings");
+    // Always the door into a fresh session. With no model configured yet the
+    // host shows a warning dialog on the way in, and a send that goes ahead
+    // anyway bounces back in the wall as the same note, in red.
+    ai.host("new-session");
   }
 });
 ai.on("ctx", function (data) {
-  // The host's verdict (a usable provider exists?) and its account state. The
-  // buttons read canStart at click time, so only a signedIn flip needs a
-  // re-render (it changes which buttons the choice step shows).
-  if (data && typeof data.canStart === "boolean") canStart = data.canStart;
+  // The host's account state: a signed-in user has no account to create, so
+  // a flip re-renders the choice step (it changes which buttons it shows).
   if (data && typeof data.signedIn === "boolean" && data.signedIn !== signedIn) {
     signedIn = data.signedIn;
     if (booted) render();

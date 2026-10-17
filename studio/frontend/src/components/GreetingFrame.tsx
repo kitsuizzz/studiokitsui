@@ -9,18 +9,11 @@ interface GreetingFrameProps {
   composer: ComposerHost;
   /** The app's effective brain source (override-aware, from the App). */
   source?: string;
-  /** True when a usable provider already exists (the platform gateway, or one
-      added in Settings): "Continue as guest" starts a session directly
-      instead of opening Settings. */
-  canStart?: boolean;
   /** The host's account state; the brain hides "Create an account" for it. */
   signedIn?: boolean;
-  /** The brain asked to start a fresh conversation (a guest with a usable
-      provider) — the host routes to a new session. */
+  /** The brain asked to start a fresh conversation — the host routes to a
+      new session, and warns (a dialog) when no model is configured yet. */
   onNewSession?: () => void;
-  /** No usable provider yet: the brain's "Continue as guest" opens the
-      Settings page (the provider box is where a model gets added). */
-  onOpenSettings?: () => void;
   /** Open the auth dialog (the brain's "Create an account" button). */
   onOpenAuth?: (mode: "signin" | "signup") => void;
 }
@@ -33,16 +26,15 @@ interface GreetingFrameProps {
  * to the app. The welcome carries no provider form: models are configured in
  * Settings.
  */
-export default function GreetingFrame({ composer, source, canStart, signedIn, onNewSession, onOpenAuth, onOpenSettings }: GreetingFrameProps) {
+export default function GreetingFrame({ composer, source, signedIn, onNewSession, onOpenAuth }: GreetingFrameProps) {
   const onHost = (action: string, arg?: unknown) => {
     if (action === "new-session") onNewSession?.();
-    else if (action === "settings") onOpenSettings?.();
     else if (action === "auth") onOpenAuth?.(arg as "signin" | "signup");
   };
 
   const ctxData = useMemo(
-    () => ({ signedIn: !!signedIn, canStart: !!canStart }),
-    [signedIn, canStart]
+    () => ({ signedIn: !!signedIn }),
+    [signedIn]
   );
 
   return (

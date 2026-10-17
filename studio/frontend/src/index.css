@@ -3139,6 +3139,50 @@ li.done .app-plan-check {
   background: rgba(0, 0, 0, 0.55);
 }
 
+/* The no-model warning: shown on the way into a session started from the
+   greeting when no usable model is configured yet. It shares the consent
+   dialog's shell and the wall's danger color for its heading. */
+.model-warning-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(22, 22, 22, 0.32);
+}
+
+.model-warning {
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px;
+  background: var(--wall);
+  border: 1px solid var(--hairline-2);
+}
+
+.model-warning-title {
+  margin: 0;
+  font: 600 15px/1.4 var(--font-label);
+  color: var(--danger);
+}
+
+.model-warning-text {
+  margin: 8px 0 0;
+  font: 400 13px/1.6 var(--font-label);
+  color: var(--label);
+}
+
+.model-warning-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+[data-theme="dark"] .model-warning-backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
 .studio-retry {
   padding: 4px 10px;
   border: 1px solid var(--hairline-2);

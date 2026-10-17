@@ -21,9 +21,11 @@ opens only into Chat).
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
 lands on the landing page — the Chat half's welcome, where Create an account
-is one click and Continue as guest opens the chat (with no model configured
-yet it leads into Settings, where a provider is added — the welcome itself
-carries no provider form) — while an **account** always lands wherever it left
+is one click and Continue as guest opens the chat — the welcome itself carries
+no provider form, so with no model configured a warning dialog names what is
+missing (and points to Settings, where a provider is added), and a send that
+goes ahead anyway bounces back in the wall with the same note, in red — while
+an **account** always lands wherever it left
 off last time, which is the `place` record in its store: on the backend, so it
 follows the account to any device. The halves have their own addresses,
 `/chat` and `/studio` (the canvas never bounces) — the door is the navigation.

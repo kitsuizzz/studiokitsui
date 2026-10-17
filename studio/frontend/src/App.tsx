@@ -91,6 +91,11 @@ const MAX_REVIEW_PASSES = 2;
 /** The built-in apps that run on a code brain (and so have a Code pane). */
 const CODE_APP_IDS = ["greeting", "conversation"];
 
+/** The one note shared by the greeting's warning dialog and the red in-wall
+    error: a send made with no usable model bounces back as exactly this
+    message. */
+const NO_MODEL_NOTE = "No model is configured yet. Add a provider in Settings to start chatting.";
+
 export type Theme = "light" | "dark";
 
 const defaultSettings: Settings = {
@@ -486,7 +491,7 @@ export default function App() {
   const [account, setAccount] = useState<AccountUser | null>(null);
   /** The platform-provided models: the deployment's gateway (its listing is
       static per deployment). Null when it does not answer — the greeting then
-      falls back to the provider form. */
+      warns that no model is configured yet. */
   const [platform, setPlatform] = useState<{ baseUrl: string; model: string; models: ModelInfo[] } | null>(null);
   /** The signed-in account's saved BYOK providers (empty = platform mode). */
   const [profile, setProfile] = useState<SavedProvider[]>([]);
@@ -494,6 +499,9 @@ export default function App() {
   const [authMode, setAuthMode] = useState<"signin" | "signup" | null>(null);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  /** A session was started from the greeting with no usable model: the
+      warning dialog (NO_MODEL_NOTE) is up on the new conversation. */
+  const [modelWarning, setModelWarning] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === "1";
@@ -1066,14 +1074,16 @@ export default function App() {
     vision: true,
   });
 
+  // Only a missing agent hard-blocks the composer. A missing model does not:
+  // the send goes through and the wall answers in red with NO_MODEL_NOTE, so
+  // the attempt is visible instead of swallowed.
   const sendBlocker = !activeAgent
     ? "No agent is configured, so messages can't be sent."
-    : !modelProvider || !modelId || !providerUsable(modelProvider)
-      ? `Agent “${activeAgent.name}” has no usable provider.`
-      : null;
+    : null;
 
-  /** The landing page's "Continue as guest" can start a session right away
-      when the platform gateway or a usable BYOK provider already exists. */
+  /** Whether a session can actually talk: the platform gateway or a usable
+      BYOK provider exists. When it is false, entering a session from the
+      greeting shows the no-model warning dialog (NO_MODEL_NOTE). */
   const guestCanStart = platform != null || providerUsable(modelProvider);
 
   const current: CurrentMeta = useMemo(
@@ -1684,10 +1694,12 @@ export default function App() {
     const content = text.trim();
     if ((!content && images.length === 0) || streamingId != null || buildingId != null) return;
     const agent = activeAgent;
+    if (!agent) return;
     const provider = modelProvider;
-    if (!agent || !provider || !modelId || !providerUsable(provider)) return;
-    const llm = llmFor(provider, modelId, effectiveEffort);
-    const systemPrompt = buildAgentSystemPrompt(agent, appCode || undefined, studios.map((s) => ({ title: s.title, id: s.id })), settings.webTools);
+    // A missing model no longer hard-blocks the send (only a missing agent
+    // does): the attempt is recorded, and the wall answers in red with the
+    // same note the greeting's warning dialog showed.
+    const noModel = !provider || !modelId || !providerUsable(provider);
     const meta: TurnMeta = {
       agentId: agent.id,
       agentName: agent.name,
@@ -1701,7 +1713,11 @@ export default function App() {
       images: images.length ? images : undefined,
       at: Date.now(),
     };
-    const placeholder: ChatMessage = { role: "assistant", content: "", meta };
+    // The assistant half of the turn: an empty placeholder the stream fills
+    // (the normal path), or the red no-model note (the bounced path).
+    const placeholder: ChatMessage = noModel
+      ? { role: "assistant", content: NO_MODEL_NOTE, error: true, meta }
+      : { role: "assistant", content: "", meta };
     const fallbackTitle = content.slice(0, 40) || "[Image]";
     let cid = activeId;
     let history: ChatMessage[];
@@ -1743,8 +1759,19 @@ export default function App() {
     const finalCid = cid;
     setConversations(next);
     setActiveId(finalCid);
+    if (noModel) {
+      // Nothing to stream: the red note above is the whole exchange. The
+      // composer stays live, so the next attempt goes through once a model
+      // is in Settings.
+      return;
+    }
+    // Redundant at runtime (noModel is false here) — the repeat only narrows
+    // the types for the streaming path below.
+    if (!provider || !modelId || !providerUsable(provider)) return;
     setStreamingId(cid);
     setFirstTokenCid(null);
+    const llm = llmFor(provider, modelId, effectiveEffort);
+    const systemPrompt = buildAgentSystemPrompt(agent, appCode || undefined, studios.map((s) => ({ title: s.title, id: s.id })), settings.webTools);
 
     let reply = "";
     let studioClaimed = false;
@@ -3146,10 +3173,13 @@ export default function App() {
             </main>
           ) : accountState === "guest" || (accountState === "user" && (guest == null || onboardedThisSessionRef.current)) ? (
             <GreetingFrame
-              canStart={guestCanStart}
-              onNewSession={() => newChat()}
+              onNewSession={() => {
+                newChat();
+                // No model to talk to: warn on the way in. A send that goes
+                // ahead anyway bounces back in the wall with the same note.
+                if (!guestCanStart) setModelWarning(true);
+              }}
               onOpenAuth={(mode) => setAuthMode(mode)}
-              onOpenSettings={() => setShowSettings(true)}
               source={effectiveSource("greeting", appOverrides)}
               signedIn={accountState === "user"}
               composer={{
@@ -3216,6 +3246,29 @@ export default function App() {
               : undefined
           }
         />
+      )}
+      {modelWarning && (
+        <div className="model-warning-backdrop">
+          <div className="model-warning" role="dialog" aria-label="No model configured">
+            <p className="model-warning-title">No model yet</p>
+            <p className="model-warning-text">{NO_MODEL_NOTE}</p>
+            <div className="model-warning-actions">
+              <button type="button" className="btn ghost small" onClick={() => setModelWarning(false)}>
+                Dismiss
+              </button>
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  setModelWarning(false);
+                  setShowSettings(true);
+                }}
+              >
+                Open Settings
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {toolAsk && (
         <div className="ai-consent-backdrop">
