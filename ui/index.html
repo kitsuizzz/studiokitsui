@@ -1436,6 +1436,8 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
     <div class="bxtools" id="bxtools">
       <span class="bxheadtitle" id="bxtTitle">Studio Kitsui</span>
       <span class="bxheadtag" id="bxtTag" hidden></span>
+      <span class="bxtbtn" id="bxtChat" hidden title="back to the chat conversation this canvas belongs to"
+            onclick="bxChatGo()">Chat →</span>
       <span class="bxtspace"></span>
       <span class="bxtbtn" id="bxtDocs" title="the handbook: what this is, how to use the boxes"
             onclick="window.open('/docs', '_blank')">Docs</span>
@@ -8764,7 +8766,7 @@ function bxAccountUnlockForm() {
       if (rows.length) {
         let opened = false;
         for (const r of rows) {
-          try { await bxOpenRecord(cryptoKey, "canvas|" + r.id, r.blob); opened = true; break; }
+          try { await bxOpenRecord(cryptoKey, bxCanvasAad(r.id), r.blob); opened = true; break; }
           catch (e) {}
         }
         if (!opened) throw new Error("that access key does not open this account's designs");
@@ -8825,35 +8827,53 @@ async function bxCanvasRecords() {             // the raw `canvas` rows: id + ci
   const store = await bxStoreRead();           // the key is not needed to fetch
   return Array.isArray(store && store.canvases) ? store.canvases : [];
 }
+function bxCanvasAad(id) {                      // the record key is the AAD. Two
+  // shapes of row id coexist: the chat half stores "canvas|<id>" (key and
+  // AAD alike); this half's legacy rows are the bare id under that same
+  // AAD. Prefixed keys pass through, bare ones get the prefix.
+  return id && String(id).indexOf("canvas|") === 0 ? id : "canvas|" + id;
+}
+
 async function bxCanvases() {                  // the list, decrypted: name + design
   const rows = await bxCanvasRecords();
   const out = [];
   for (const r of rows) {
-    let name = "(unreadable)", design = null;
+    let name = "(unreadable)", design = null, session = null;
     try {
-      const v = await bxOpenRecord(BXACCT.key, "canvas|" + r.id, r.blob);
+      const v = await bxOpenRecord(BXACCT.key, bxCanvasAad(r.id), r.blob);
       name = String((v && v.name) || "canvas");
       design = (v && v.design) || null;
+      session = (v && v.session) != null ? String(v.session) : null;
     } catch (e) {}
-    out.push({ id: r.id, name: name, updatedAt: r.updatedAt || 0, design: design });
+    out.push({ id: r.id, name: name, updatedAt: r.updatedAt || 0, design: design,
+               session: session });
   }
   out.sort((a, b) => (bxWhenMs(b.updatedAt) - bxWhenMs(a.updatedAt)));
   return out;
 }
-async function bxAccountSave(name, design, status, go, onSaved) {
+async function bxAccountSave(name, design, status, go, onSaved, bound) {
   if (typeof fetch !== "function" || !BXACCT.user || !BXACCT.key) return false;
   if (go) go.textContent = "sealing …";
   try {
-    const rows = await bxCanvasRecords();      // saving over a name replaces it
-    let id = "";
-    for (const r of rows) {
-      try {
-        const v = await bxOpenRecord(BXACCT.key, "canvas|" + r.id, r.blob);
-        if (String((v && v.name) || "") === name) { id = r.id; break; }
-      } catch (e) {}
+    // Saving a bound project goes in place over its own row — the id (and the
+    // chat binding, if it has one) is already known. A fresh project keeps the
+    // old path: replace the same-named row, or mint an id when none matches.
+    const rows = await bxCanvasRecords();
+    let id = "", session = null;
+    if (bound && bound.canvas) {
+      id = String(bound.canvas);
+      if (bound.session != null) session = String(bound.session);
+    } else {
+      for (const r of rows) {                   // saving over a name replaces it
+        try {
+          const v = await bxOpenRecord(BXACCT.key, bxCanvasAad(r.id), r.blob);
+          if (String((v && v.name) || "") === name) { id = r.id; break; }
+        } catch (e) {}
+      }
+      if (!id) id = "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
     }
-    if (!id) id = "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
-    const blob = await bxSealRecord(BXACCT.key, "canvas|" + id, { name: name, design: design });
+    const blob = await bxSealRecord(BXACCT.key, bxCanvasAad(id),
+      { name: name, design: design, session: session });
     if (blob.length > BX_CANVAS_MAX)
       throw new Error("that design is too big to seal (" +
                       (blob.length / 2 ** 20).toFixed(1) + " MB)");
@@ -8970,6 +8990,12 @@ function bxAccountOpenApply(name, design) {
 // The browser always keeps a copy; a signed-in, unlocked account also gets it
 // sealed and posted, so a reload (or another machine) lands where you left off.
 let BXSESSION = { hold: false, restored: false };
+// The door parameter: /studio?canvas=<id> names the canvas this boot should
+// open on screen — the chat half's Studio door crosses over with it. The id
+// is the bare one; in the store the row may carry the "canvas|" prefix.
+// Read once, softly: the boot harness stubs location.
+let BXCANVAS_WANT = "";
+try { BXCANVAS_WANT = (new URLSearchParams(location.search || "").get("canvas")) || ""; } catch (e) {}
 
 function bxSessionNow() {
   const tabs = (BX.projects || []).filter(p => p.saved && p.canvas)
@@ -9007,25 +9033,42 @@ async function bxSessionStored() {             // the sealed session, or null
 function bxSessionMatch(sn, rows) {            // the session's tabs, still saved
   const out = [];
   for (const t of (sn && sn.tabs) || []) {
-    const hit = (rows || []).find(r => r.id === t.id);
+    // Tab ids arrive in two shapes: a row's own (the canvas's tabs) or the
+    // chat half's bare one — "canvas|" + bare is the same row in the store.
+    const hit = (rows || []).find(r => r.id === t.id || r.id === "canvas|" + t.id);
     if (hit) out.push(hit);
   }
   return out;
 }
 async function bxSessionRestore() {            // at sign-in: open what was open
   if (!BXACCT.user || !BXACCT.key) return false;
-  const sn = await bxSessionStored();          // the account's own record
-  if (!sn || !sn.tabs || !sn.tabs.length) return false;
+  const stored = await bxSessionStored();      // the account's own tab record
+  // A door visit may name a canvas: ?canvas=<id> is how the chat half's
+  // Studio button crosses over. With no tab record to bring back, the named
+  // canvas stands in for one — it becomes the sole, active tab.
+  const sn = (stored && stored.tabs && stored.tabs.length) ? stored
+           : (BXCANVAS_WANT ? { tabs: [{ id: BXCANVAS_WANT }], active: null } : null);
+  if (!sn) return false;
   let rows = [];
   try { rows = await bxCanvases(); } catch (e) { return false; }
-  const want = bxSessionMatch(sn, rows);
+  let want = bxSessionMatch(sn, rows);
+  if (BXCANVAS_WANT) {                          // the named canvas opens first…
+    const hit = (rows || []).find(r => r.id === BXCANVAS_WANT || r.id === "canvas|" + BXCANVAS_WANT);
+    if (hit) want = [hit].concat(want.filter(w => w !== hit));
+    else if (!want.length) bxTabsSay("That canvas is not in your store.");
+  }
   if (!want.length) return false;
   BXSESSION.hold = true;                       // the opens must not half-push
   let opened = 0, activeId = null;
+  // On screen: the door's canvas when one was named, else the account's last
+  // active tab. Ids come in two shapes (bare / prefixed) — see bxSessionMatch.
+  const isTarget = (w) => BXCANVAS_WANT
+    ? (w.id === BXCANVAS_WANT || w.id === "canvas|" + BXCANVAS_WANT)
+    : (sn.active != null && (w.id === sn.active || w.id === "canvas|" + sn.active));
   for (const w of want) {
     if (!w.design) continue;
-    const pr = bxTabOpenSaved(w.name, w.design, w.id);
-    if (pr) { opened += 1; if (w.id === sn.active) activeId = pr.id; }
+    const pr = bxTabOpenSaved(w.name, w.design, w.id, w.session);
+    if (pr) { opened += 1; if (isTarget(w)) activeId = pr.id; }
   }
   if (opened) {
     bxTabStash();                              // the open screen belongs to its tab
@@ -9166,10 +9209,12 @@ function bxTabNew() {                          // a blank canvas, its own tab
   bxSessionPush();
   return p;
 }
-function bxTabOpenSaved(name, doc, canvasId) { // a saved canvas → its own tab
+function bxTabOpenSaved(name, doc, canvasId, session) { // a saved canvas → its own tab
   bxTabStash();
   const p = { id: bxId(), name: String(name || "saved canvas"),
-              canvas: String(canvasId || ""), dirty: false, saved: true };
+              canvas: String(canvasId || ""),
+              session: session != null ? String(session) : null,
+              dirty: false, saved: true };
   (BX.projects = BX.projects || []).push(p);
   BX.active = p.id;
   if (!bxTabLoad(p, doc)) {
@@ -9238,7 +9283,7 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
     bxTabsSay("saved · " + p.name + " ✓");
     bxTabsRender();
     bxSessionPush();
-  });
+  }, p);
   return true;
 }
 function bxTabsRender() {                      // the strip, its stars, the note
@@ -9349,7 +9394,7 @@ function bxTabOpenSavedRow(row, status) {
   if (!row || typeof status === "undefined") return;
   if (status) status.textContent = "opening " + row.name + " \u2026";
   if (!row.design) { status.textContent = "that canvas could not be opened"; return; }
-  if (!bxTabOpenSaved(row.name, row.design, row.id))
+  if (!bxTabOpenSaved(row.name, row.design, row.id, row.session))
     status.textContent = "that canvas cannot be opened here";
   else
     bxtDropsClose();
@@ -10395,6 +10440,41 @@ function bxUsageWatch(on) {                    // the 5 s poll is fine when idle
 function bxThemeNow() {                        // "dark" (the canvas's home) or "light"
   return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
 }
+function bxCanvasSaveActive() {                 // best-effort: seal the canvas on
+  return new Promise((resolve) => {              // screen and post it. Resolves true when
+    try {                                        // the store has it, false when there's
+      if (typeof fetch !== "function" || !BXACCT.user || !BXACCT.key) return resolve(false);
+      const p = bxProject();
+      if (!p || p.kind === "ai" || !p.canvas) return resolve(false);
+      const design = bxExportCanvas() || (bxTabStash() || {}).doc || null;
+      if (!design) return resolve(false);        // nothing on screen worth carrying
+      (async () => {
+        try {
+          const blob = await bxSealRecord(BXACCT.key, bxCanvasAad(p.canvas),
+            { name: p.name, design: design, session: p.session || null });
+          const r = await fetch("/chat/auth/store/sync", { method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ canvases: { upserts: [{ id: p.canvas, blob: blob }], deletes: [] } }) });
+          if (r.ok) { p.dirty = false; resolve(true); return; }
+        } catch (e) {}
+        resolve(false);
+      })();
+    } catch (e) { resolve(false); }
+  });
+}
+function bxChatGo() {                           // the head's door back to the chat half
+  const p = bxProject();
+  if (!p || p.kind === "ai" || !p.session) return;
+  const dest = "/chat?conversation=" + p.session;
+  const go = () => {
+    if (typeof location === "undefined") return;
+    if (location.replace) location.replace(dest); else location.href = dest;
+  };
+  let went = false;
+  const finish = () => { if (!went) { went = true; go(); } };
+  setTimeout(finish, 2500);                     // the door does not wait on the post
+  bxCanvasSaveActive().then(finish);
+}
 function bxHeadRefresh() {                     // the head: the canvas's name, its device
   const t = $("bxtTitle"), tag = $("bxtTag");
   const p = typeof bxProject === "function" ? bxProject() : null;
@@ -10406,6 +10486,10 @@ function bxHeadRefresh() {                     // the head: the canvas's name, i
                     : d === "cpu" ? "cpu" : "no backend";
     tag.hidden = !a;
   }
+  // Chat → is live on a canvas that belongs to a chat conversation; the
+  // AI agent's tab is a conversation of its own, and has no such thing.
+  const chat = $("bxtChat");
+  if (chat) chat.hidden = !(p && p.kind !== "ai" && p.session != null);
 }
 function bxThemeApply() {                      // the toggle shows the theme in use
   const el = $("bxtTheme");
