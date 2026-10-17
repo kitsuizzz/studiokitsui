@@ -221,7 +221,7 @@ function render() {
   var date = formatDate(ctx.createdAt != null ? ctx.createdAt : Date.now());
   var head = {
     type: "wallhead",
-    title: ctx.title || "New chat",
+    title: ctx.title || "New session",
     meta: [
       { text: ctx.current.agentName },
       { text: ctx.current.model, model: true },

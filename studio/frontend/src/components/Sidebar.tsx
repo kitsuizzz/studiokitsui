@@ -22,7 +22,7 @@ interface SidebarProps {
   theme: Theme;
   onToggleTheme: () => void;
   onSelect: (id: number) => void;
-  onNewChat: () => void;
+  onNewSession: () => void;
   onDelete: (id: number) => void;
   onOpenSearch: () => void;
   onToggleCollapsed: () => void;
@@ -42,7 +42,7 @@ export default function Sidebar({
   theme,
   onToggleTheme,
   onSelect,
-  onNewChat,
+  onNewSession,
   onDelete,
   onOpenSearch,
   onToggleCollapsed,
@@ -69,9 +69,9 @@ export default function Sidebar({
           </button>
         </div>
 
-        <button className="sidebar-new" type="button" onClick={onNewChat} title="New chat">
+        <button className="sidebar-new" type="button" onClick={onNewSession} title="New session">
           <PlusIcon size={15} />
-          <span className="sidebar-text">New chat</span>
+          <span className="sidebar-text">New session</span>
         </button>
 
         <button
@@ -90,7 +90,7 @@ export default function Sidebar({
             <div className="conv-empty sidebar-text">No conversations yet</div>
           ) : (
             sorted.map((c) => {
-              const title = (c.id === activeId ? activeTypedTitle : c.title) || "New chat";
+              const title = (c.id === activeId ? activeTypedTitle : c.title) || "New session";
               const live = c.id === streamingId;
               const confirming = confirmId === c.id;
               return (

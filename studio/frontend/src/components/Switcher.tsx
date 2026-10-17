@@ -39,13 +39,13 @@ export default function Switcher({
     const q = query.trim().toLowerCase();
     const list: Item[] = [];
     if (!q) {
-      list.push({ key: "new", label: "New chat", hint: "create", run: onNew });
+      list.push({ key: "new", label: "New session", hint: "create", run: onNew });
     }
     const sorted = [...conversations].sort(
       (a, b) => (b.createdAt ?? b.id) - (a.createdAt ?? a.id) || b.id - a.id
     );
     for (const c of sorted) {
-      const title = c.title || "New chat";
+      const title = c.title || "New session";
       if (q && !title.toLowerCase().includes(q)) continue;
       list.push({
         key: String(c.id),

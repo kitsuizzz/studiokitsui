@@ -123,7 +123,7 @@ export function wallBrain(ctx: WallCtx): WallContent {
 
   const head: StudioBlock = {
     type: "wallhead",
-    title: title || "New chat",
+    title: title || "New session",
     meta: [
       { text: current.agentName },
       { text: current.model, model: true },

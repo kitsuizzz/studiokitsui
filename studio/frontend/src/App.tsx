@@ -1311,7 +1311,7 @@ export default function App() {
     [pruneEmpty]
   );
 
-  const newChat = useCallback(() => {
+  const newSession = useCallback(() => {
     // Reuse an existing empty conversation instead of piling up blanks.
     const blank = conversations.find((c) => c.messages.length === 0 && c.id !== streamingId);
     if (blank) {
@@ -1353,8 +1353,8 @@ export default function App() {
     if (activeId != null || activeStudioId != null) return;
     const last = lastRef.current;
     if (last != null && conversations.some((c) => c.id === last)) openConversation(last);
-    else newChat();
-  }, [loaded, accountState, guest, platform, activeId, activeStudioId, newChat, openConversation, conversations]);
+    else newSession();
+  }, [loaded, accountState, guest, platform, activeId, activeStudioId, newSession, openConversation, conversations]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
@@ -1613,7 +1613,7 @@ export default function App() {
       if (list.length) {
         openConversation(list[0].id);
       } else {
-        // The last conversation is gone: start a fresh one. `newChat` can't
+        // The last conversation is gone: start a fresh one. `newSession` can't
         // be reused here — its closure still sees the pre-delete list and
         // could re-adopt the just-deleted empty conversation.
         const freshId = idRef.current++;
@@ -3040,7 +3040,7 @@ export default function App() {
             theme={theme}
             onToggleTheme={toggleTheme}
             onSelect={openConversation}
-            onNewChat={newChat}
+            onNewSession={newSession}
             onDelete={deleteConversation}
             onOpenSearch={() => setShowSwitcher(true)}
             onToggleCollapsed={toggleSidebarCollapsed}
@@ -3050,7 +3050,7 @@ export default function App() {
         <div className="main">
           {active != null && !activeStudio && (
             <RunningHead
-              title={typedTitle || "New chat"}
+              title={typedTitle || "New session"}
               showTitle={!wallTextVisible}
               nextTokens={nextTurnTokens}
               maxTokens={maxTokens}
@@ -3174,7 +3174,7 @@ export default function App() {
           ) : accountState === "guest" || (accountState === "user" && (guest == null || onboardedThisSessionRef.current)) ? (
             <GreetingFrame
               onNewSession={() => {
-                newChat();
+                newSession();
                 // No model to talk to: warn on the way in. A send that goes
                 // ahead anyway bounces back in the wall with the same note.
                 if (!guestCanStart) setModelWarning(true);
@@ -3207,7 +3207,7 @@ export default function App() {
           conversations={conversations.filter((c) => c.kind !== "build")}
           activeId={activeId}
           onSelect={openConversation}
-          onNew={newChat}
+          onNew={newSession}
           onClose={() => setShowSwitcher(false)}
         />
       )}

@@ -679,7 +679,7 @@ export function Block({ block, ctx, depth = 0 }: { block: StudioBlock; ctx: Bloc
     case "wallhead":
       return (
         <header className="wall-text">
-          <h1 className="wall-title">{block.title || "New chat"}</h1>
+          <h1 className="wall-title">{block.title || "New session"}</h1>
           <div className="wall-meta">
             {block.meta.map((m, i) => (
               <span key={i} style={{ display: "contents" }}>
