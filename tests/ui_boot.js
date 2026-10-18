@@ -106,6 +106,9 @@ const findByWalk = id => {
   })(bodyEl);
   return hit;
 };
+// the switcher's backdrop starts hidden in the HTML (id="bxswitchBack" hidden);
+// auto-created stubs default to shown, and bxSwitchToggle decides from the flag
+getEl("bxswitchBack").hidden = true;
 const store = new Map();
 let onUnhandled = null;
 process.on("unhandledRejection", e => { if (onUnhandled) onUnhandled(e); });
@@ -245,7 +248,8 @@ globalThis.__t = {
   bxMenuBuild, bxMenuClose, bxClip, bxClipFit, bxShape, bxtExport, bxtImport, bxtForm, bxtRefresh,
   bxWeightsForm, bxWeightsApply, bxWeightsExportForm, bxWeightScore, bxTensorDims,
   bxTensorDtype, bxApplyManifest,
-  bxtDropsClose, bxtPaletteToggle, bxtImportToggle, bxtabToggle,
+  bxtDropsClose, bxtPaletteToggle, bxtImportToggle,
+  bxSwitchToggle, bxSwitchClose, bxSwitchBuild, bxsToggle,
   bxThemeNow, bxThemeToggle,
   bxTabsRender, bxTabNew, bxTabSave, bxTabSelect, bxTabOpenSaved, bxProject,
   bxTabClose, bxTabAnyDirty, bxTabLoad, bxSessionNow, bxSessionPush, bxSessionMatch,
@@ -831,7 +835,7 @@ check("Import \u25be \u2192 Hugging Face model \u2026: the form shows itself", (
   // the door the toolbar owns: no right-click menu is up to carry the form —
   // it must unhide #bxmenu on its own (it used to build it hidden: "does nothing")
   const before = __t.BX.nodes.length;
-  __t.bxtDropsClose();                         // a clean strip
+  __t.bxtDropsClose();                         // a clean head
   getEl("bxtImport").click();                  // the Import dropdown opens
   const hf = getEl("bxtImportMenu").children
     .find(c => c.textContent.indexOf("Hugging Face") >= 0);
@@ -1274,8 +1278,8 @@ check("the Palette menu: Input and Output up top, categories below", () => {
   eql(menu.children.filter(c => c.className === "bxtcat").map(c => c.textContent),
     ["Model", "Layers", "Blocks", "Vision", "Text", "Data", "Training",
      "Analysis"],
-    "and only the shelves are listed below \u2014 the AI shelf lives in the + now");
-  // the agent box is no longer a card here: its home is the AI agent tab
+    "and only the shelves are listed below \u2014 the AI shelf lives in the \u2318K switcher now");
+  // the agent box is no longer a card here: its home is the AI agent canvas
   ok(menu.querySelectorAll(".bxpalitem").map(i => i.getAttribute("data-kind"))
        .indexOf("agent") < 0, "\u2026no agent card in the palette");
   // expand a category: its visual boxes appear, drawn by the card renderer
@@ -1473,12 +1477,12 @@ check("the Import menu: one pop-up, one file, no box spawned", () => {
   __t.bxRemove(box.id);
 });
 
-check("a toolbar menu opens under its own button, not the strip's left", () => {
-  const strip = getEl("bxtools");
+check("a toolbar menu opens under its own button, not the head's left", () => {
+  const head = getEl("bxtools");
   const pal = getEl("bxtPalette"), imp = getEl("bxtImport"), men = getEl("bxtImportMenu");
-  const keep = { strip: strip.getBoundingClientRect, pal: pal.getBoundingClientRect,
+  const keep = { head: head.getBoundingClientRect, pal: pal.getBoundingClientRect,
                  imp: imp.getBoundingClientRect, w: men.offsetWidth };
-  strip.getBoundingClientRect = () => ({ left: 0, top: 0, width: 900, height: 36 });
+  head.getBoundingClientRect = () => ({ left: 0, top: 0, width: 900, height: 36 });
   pal.getBoundingClientRect = () => ({ left: 10, top: 0, width: 76, height: 26 });
   imp.getBoundingClientRect = () => ({ left: 210, top: 0, width: 70, height: 26 });
   men.offsetWidth = 180;
@@ -1493,7 +1497,7 @@ check("a toolbar menu opens under its own button, not the strip's left", () => {
   __t.bxtVramToggle();
   eql(getEl("bxtVramMenu").style.left, "", "the right-anchored VRAM menu is left alone");
   __t.bxtDropsClose();
-  strip.getBoundingClientRect = keep.strip;    // the stubs go back untouched
+  head.getBoundingClientRect = keep.head;    // the stubs go back untouched
   pal.getBoundingClientRect = keep.pal;
   imp.getBoundingClientRect = keep.imp;
   men.offsetWidth = keep.w;
@@ -4743,47 +4747,51 @@ check("the Script box: python on the card, pass-through sizes, no weights", () =
   __t.bxRemove(s.id);
 });
 
-check("the project tabs: named, starred, switched \u2014 and saved from the tab", () => {
+check("the project list: named, dotted, switched \u2014 and saved from the item", () => {
   const t1 = __t.bxProject();
   ok(t1 && t1.name === "New Project 1", "the boot canvas is New Project 1");
   t1.dirty = false;                            // earlier checks have drawn already
   __t.bxTabsRender();
-  const strip = () => getEl("bxtabrail").querySelectorAll(".bxtab")
-    .map(t => t.querySelectorAll(".nm")[0].textContent +
-              (t.querySelectorAll(".star").length ? "*" : ""));
-  eql(strip(), ["New Project 1"], "the strip shows it, clean until something changes");
-  // a change stars the tab
+  const strip = () => getEl("bxlist").querySelectorAll(".bxcitem")
+    .map(t => t.querySelectorAll(".bxctitle")[0].textContent +
+              (t.querySelectorAll(".bxtdot").length ? "*" : ""));
+  eql(strip(), ["New Project 1"], "the list shows it, clean until something changes");
+  // a change dots the item
   const a = __t.bxAdd("input", 100, 80, { dout: 4 });
-  ok(t1.dirty, "an edit stars the tab");
-  eql(strip(), ["New Project 1*"], "\u2026and the star rides the name");
-  // the + : New Canvas, the AI agent, and Saved Canvas
-  ok(__t.bxtabToggle() === true, "the + opens its menu");
-  eql(getEl("bxtabMenu").children.map(c => c.textContent),
-    ["New Canvas", "AI agent", "Saved Canvas \u2026"], "three ways in");
-  getEl("bxtabMenu").children.find(c => c.textContent === "New Canvas").click();
+  ok(t1.dirty, "an edit dots the item");
+  eql(strip(), ["New Project 1*"], "\u2026and the dot rides the tile");
+  // the switcher: the three ways in, and the open canvases beneath
+  ok(__t.bxSwitchToggle() === true, "the search door opens the switcher");
+  const labels = () => getEl("bxswitchList").querySelectorAll(".bxswitch-label")
+    .map(l => l.textContent);
+  eql(labels(), ["New canvas", "AI agent", "Saved canvas \u2026", "New Project 1"],
+      "three ways in, then the open canvases");
+  getEl("bxswitchList").querySelectorAll(".bxswitch-label")
+    .find(l => l.textContent === "New canvas")._parent.click();
   const t2 = __t.bxProject();
-  eql([t2.name, t2.dirty], ["New Project 2", false], "a new blank tab, nothing unsaved");
+  eql([t2.name, t2.dirty], ["New Project 2", false], "a new blank canvas, nothing unsaved");
   eql(__t.BX.nodes.filter(n => n.kind === "input").length, 1,
      "\u2026with the blank skeleton");
   eql(__t.BX.edges.length, 1, "\u2026wired input \u2192 output");
-  eql(strip(), ["New Project 1*", "New Project 2"], "both tabs listed, the second active");
+  eql(strip(), ["New Project 1*", "New Project 2"], "both canvases listed, the second active");
   // switching brings the other canvas back, with everything it held
-  getEl("bxtabrail").querySelectorAll(".bxtab")[0].click();
-  eql(__t.bxProject().name, "New Project 1", "clicking a tab brings it back");
-  ok(__t.BX.nodes.some(n => n.id === a.id), "\u2026with the box the first tab had");
-  ok(__t.bxProject().dirty, "\u2026and its star");
-  // saving without an account says so, in the strip's note
+  getEl("bxlist").querySelectorAll(".bxcitem")[0].click();
+  eql(__t.bxProject().name, "New Project 1", "clicking an item brings it back");
+  ok(__t.BX.nodes.some(n => n.id === a.id), "\u2026with the box the first canvas had");
+  ok(__t.bxProject().dirty, "\u2026and its dot");
+  // saving without an account says so, in the list's note
   __t.BXACCT.user = null;
   __t.BXACCT.locked = false;
   __t.bxTabSave();
   ok(String(getEl("bxtabnote").textContent).indexOf("saving takes an account") >= 0,
      "Ctrl+S as a guest explains itself: " + getEl("bxtabnote").textContent);
-  // the + menu's saved view routes a guest to the account block
-  __t.bxtabToggle();
-  getEl("bxtabMenu").children.find(c => c.textContent.indexOf("Saved Canvas") === 0).click();
-  ok(getEl("bxtabMenu").children.map(c => c.textContent).join(" | ")
-       .indexOf("need an account") >= 0, "Saved Canvas tells a guest the same");
-  __t.bxtDropsClose();
+  // the switcher's saved view routes a guest to the account block
+  __t.bxSwitchToggle();
+  getEl("bxswitchList").querySelectorAll(".bxswitch-label")
+    .find(l => l.textContent.indexOf("Saved canvas") === 0)._parent.click();
+  ok(labels().join(" | ").indexOf("need an account") >= 0,
+     "the saved view tells a guest the same");
+  __t.bxSwitchClose();
   // the Files menu is gone; the design section keeps export/import and weights
   ok(typeof __t.bxtFilesToggle === "undefined" && typeof __t.bxtFilesClose === "undefined",
      "the Files menu (and its toggles) are gone from the toolbar");
@@ -4803,34 +4811,34 @@ check("the project tabs: named, starred, switched \u2014 and saved from the tab"
   __t.bxTabsRender();
   __t.bxRemove(a.id);
   getEl("bxtabnote").textContent = "";
-  eql(strip(), ["New Project 1*"], "the strip is tidy again");
-  // the × on a tab closes it — asking first when it holds unsaved work
+  eql(strip(), ["New Project 1*"], "the list is tidy again");
+  // the × on an item closes it — asking first when it holds unsaved work
   const t3 = __t.bxTabNew();
   const t4 = __t.bxTabNew();
-  getEl("bxtabrail").querySelectorAll(".bxtab")[2]
-    .querySelectorAll(".x")[0].click();        // the clean one: no question
-  ok(!__t.bxProject(t4.id), "…the × on a clean tab closes it quietly");
+  getEl("bxlist").querySelectorAll(".bxcitem")[2]
+    .querySelectorAll(".bxclose")[0].click();  // the clean one: no question
+  ok(!__t.bxProject(t4.id), "…the × on a clean item closes it quietly");
   const asked = [];
   global.confirm = (msg) => { asked.push(String(msg)); return false; };
   t3.dirty = true;
-  eql(__t.bxTabClose(t3.id), false, "a dirty tab is not closed without a yes");
+  eql(__t.bxTabClose(t3.id), false, "a dirty canvas is not closed without a yes");
   ok(asked.length === 1 && asked[0].indexOf(t3.name) >= 0 &&
      asked[0].indexOf("not saved") >= 0, "…the question names it and its state: "
      + asked.join("|"));
   global.confirm = () => true;
   eql(__t.bxTabClose(t3.id), true, "…with a yes it closes");
   eql(__t.bxProject().name, "New Project 1", "…and the neighbour takes the screen");
-  ok(__t.bxTabAnyDirty(), "\u2026the boot tab\u2019s own star is what is left");
-  // the last tab is not removable: no × on it, and the close refuses
-  eql(getEl("bxtabrail").querySelectorAll(".x").length, 0,
-      "the last tab wears no × at all");
+  ok(__t.bxTabAnyDirty(), "\u2026the boot canvas\u2019s own dot is what is left");
+  // the last canvas is not removable: no × on it, and the close refuses
+  eql(getEl("bxlist").querySelectorAll(".bxclose").length, 0,
+      "the last canvas wears no × at all");
   eql(__t.bxTabClose(t1b.id), false, "…and closing it is refused");
   ok(__t.bxProject() === t1b, "…the one canvas stays");
   delete global.confirm;
-  eql(strip(), ["New Project 1*"], "the strip is tidy again");
+  eql(strip(), ["New Project 1*"], "the list is tidy again");
 });
 
-checkAsync("the AI agent tab: a conversation, not a canvas", async () => {
+checkAsync("the AI agent canvas: a conversation, not a canvas", async () => {
   const allText = (el) => {
     let s = el.textContent || "";
     for (const c of el.children || []) s += " " + allText(c);
@@ -4861,10 +4869,10 @@ checkAsync("the AI agent tab: a conversation, not a canvas", async () => {
     return jr({ ok: true });
   };
   try {
-    // the + offers it, and it lands as a tab of its own kind
+    // the switcher offers it, and it lands as a canvas of its own kind
     const p = __t.bxTabNewAI();
-    eql([p.kind, p.name], ["ai", "AI agent"], "the AI agent tab exists");
-    ok(__t.BX.projects.indexOf(p) >= 0, "\u2026on the strip");
+    eql([p.kind, p.name], ["ai", "AI agent"], "the AI agent canvas exists");
+    ok(__t.BX.projects.indexOf(p) >= 0, "\u2026in the list");
     ok(__t.bxTalkOn(), "\u2026and it is the screen");
     eql(getEl("bxtalk").hidden, false, "the talk surface shows");
     eql(getEl("bxcanvas").hidden, true, "\u2026over the canvas");
@@ -4908,9 +4916,9 @@ checkAsync("the AI agent tab: a conversation, not a canvas", async () => {
     __t.bxTabSave();
     ok(String(getEl("bxtabnote").textContent).indexOf("conversation, not a canvas") >= 0,
        "Ctrl+S explains itself: " + getEl("bxtabnote").textContent);
-    // switching back loads the canvas tab exactly as it was
+    // switching back loads the canvas exactly as it was
     __t.bxTabSelect(t0.id);
-    ok(!__t.bxTalkOn(), "the canvas tab is back");
+    ok(!__t.bxTalkOn(), "the canvas is back");
     eql(getEl("bxtalk").hidden, true, "\u2026talk hidden");
     eql(getEl("bxcanvas").hidden, false, "\u2026canvas shown");
     ok(heldIds.length === 0 ||
@@ -4921,7 +4929,7 @@ checkAsync("the AI agent tab: a conversation, not a canvas", async () => {
     ok(__t.bxTalkOn() &&
        allText(getEl("bxtalk")).indexOf("why two norms?") >= 0,
        "returning shows the whole thread again");
-    // closing the AI tab: the neighbour takes the screen, talk goes off
+    // closing the AI canvas: the neighbour takes the screen, talk goes off
     __t.bxTabClose(p.id);
     ok(__t.bxProject() === t0 && !__t.bxTalkOn(), "closing it leaves the canvas");
     eql(getEl("bxtalk").hidden, true, "\u2026talk hidden with it");
@@ -4930,14 +4938,14 @@ checkAsync("the AI agent tab: a conversation, not a canvas", async () => {
   }
 });
 
-check("the order is toolbar, project tabs, canvas", () => {
+check("the order is sidebar, toolbar, canvas", () => {
   const h = fs.readFileSync(UI, "utf8");       // the page's own order, static HTML
-  const iTools = h.indexOf('<div class="bxtools"'), iRow = h.indexOf('<div class="bxrow"'),
-        iTabs = h.indexOf('<div class="bxtabs"');
-  ok(iTools >= 0 && iTabs > iTools && iRow > iTabs,
-     "the toolbar first, the tabs under it, the canvas last");
-  ok(!/class="[^"]*\bup\b[^"]*" id="bxtabMenu"/.test(h),
-     "\u2026and the + menu drops down from the strip");
+  const iMain = h.indexOf("<main>"), iSide = h.indexOf('id="bxsidebar"'),
+        iTools = h.indexOf('<div class="bxtools"'), iRow = h.indexOf('<div class="bxrow"');
+  ok(iMain >= 0 && iSide > iMain && iTools > iSide && iRow > iTools,
+     "the sidebar first, the toolbar beside it, the canvas last");
+  ok(h.indexOf('<div class="bxtabs"') < 0 && h.indexOf('id="bxtabMenu"') < 0,
+     "\u2026and the old strip and its + menu are gone");
 });
 
 check("the theme: Salon dark at home, light one click away, remembered", () => {
@@ -4946,13 +4954,14 @@ check("the theme: Salon dark at home, light one click away, remembered", () => {
      h.indexOf("Fragment Mono") >= 0, "the three Salon faces are linked");
   ok(/--s-dot:\s*#ff5a45/.test(h) && /--bg: var\(--s-wall\)/.test(h),
      "\u2026and the app's own tokens point at the Salon palette");
+  ok(h.indexOf("<span class=\"bxtheme-ico\">☀</span><span class=\"bxside-text\">Light theme</span>") >= 0,
+     "the sidebar's theme button names the other theme \u2014 sun toward light");
+  ok(h.indexOf("Dark theme") >= 0, "\u2026and the flip names it in the page's own words");
   eql(__t.bxThemeNow(), "dark", "dark is home");
   eql(__t.bxThemeToggle(), "light", "one click flips it");
-  eql(getEl("bxtTheme").textContent, "\u2600", "\u2026the toggle shows the sun");
   ok(document.documentElement.getAttribute("data-theme") === "light",
      "\u2026and the page wears the attribute the light tokens hang on");
   eql(__t.bxThemeToggle(), "dark", "and back");
-  eql(getEl("bxtTheme").textContent, "\u263e", "\u2026the moon again");
   ok(document.documentElement.getAttribute("data-theme") === null,
      "\u2026the attribute off: dark needs no attribute");
   const th = getEl("bxtTheme");
@@ -4961,17 +4970,19 @@ check("the theme: Salon dark at home, light one click away, remembered", () => {
   th.click();
 });
 
-check("the shell: the rail, the head \u2014 the mockup's composition", () => {
+check("the shell: the sidebar, the head \u2014 the chat half's composition", () => {
   const h = fs.readFileSync(UI, "utf8");
-  const iMain = h.indexOf("<main>"), iRail = h.indexOf('id="bxrail"'),
+  const iMain = h.indexOf("<main>"), iSide = h.indexOf('id="bxsidebar"'),
         iView = h.indexOf('id="view-training"');
-  ok(iMain >= 0 && iRail > iMain && iView > iRail, "the rail sits beside the canvas");
-  const rail = getEl("bxrail");
-  ok(!!rail, "the rail exists");
-  eql(["bxrNew", "bxrCanvas", "bxrAgent", "bxtTheme"].map(id => !!getEl(id)),
-    [true, true, true, true], "\u2026new canvas, the canvas, the agent, the theme");
+  ok(iMain >= 0 && iSide > iMain && iView > iSide, "the sidebar sits beside the canvas");
+  const side = getEl("bxsidebar");
+  ok(!!side, "the sidebar exists");
+  eql(["bxsCollapse", "bxrAgent", "bxrCanvas", "bxrNew", "bxrSearch", "bxtTheme"]
+       .map(id => !!getEl(id)),
+    [true, true, true, true, true, true],
+    "\u2026the fold, the agent, the canvas, a new canvas, the search door, the theme");
   // the head wears the canvas's name and its device
-  eql(getEl("bxtTitle").textContent, __t.bxProject().name, "the head names the tab");
+  eql(getEl("bxtTitle").textContent, __t.bxProject().name, "the head names the canvas");
   __t.BXRUN.local = { connected: true, agent: { name: "mac", specs: { device: "mps" } } };
   __t.bxHeadRefresh();
   eql([getEl("bxtTag").textContent, getEl("bxtTag").hidden], ["gpu \u00b7 mps", false],
@@ -4979,39 +4990,53 @@ check("the shell: the rail, the head \u2014 the mockup's composition", () => {
   __t.BXRUN.local = { connected: false, agent: null };
   __t.bxHeadRefresh();
   eql(getEl("bxtTag").hidden, true, "\u2026and goes when none is connected");
-  // the rail's + opens a canvas, the rail's agent opens the talk tab
+  // the sidebar's + opens a canvas, its agent opens the talk tab
   const before = __t.BX.projects.length;
   getEl("bxrNew").click();
-  eql(__t.BX.projects.length, before + 1, "the rail's + lands a new canvas");
+  eql(__t.BX.projects.length, before + 1, "the sidebar's + lands a new canvas");
   __t.bxTabClose(__t.BX.projects[__t.BX.projects.length - 1].id);
   getEl("bxrAgent").click();
-  ok(__t.bxTalkOn(), "the rail's agent opens the conversation");
+  ok(__t.bxTalkOn(), "the sidebar's agent opens the conversation");
   getEl("bxrCanvas").click();                   // \u2026and the canvas comes back
-  ok(!__t.bxTalkOn(), "the rail's canvas brings the canvas back: " + __t.bxProject().name);
+  ok(!__t.bxTalkOn(), "the sidebar's canvas brings the canvas back: " + __t.bxProject().name);
+  // the fold collapses the sidebar, and the choice is remembered
+  ok(!getEl("bxsidebar").classList.contains("collapsed"), "the sidebar starts open");
+  __t.bxsToggle();
+  ok(getEl("bxsidebar").classList.contains("collapsed"), "the fold closes it");
+  eql(localStorage.getItem("nnstudio_sidebar"), "1", "\u2026and remembers it");
+  __t.bxsToggle();
+  ok(!getEl("bxsidebar").classList.contains("collapsed"), "and opens it again");
+  eql(localStorage.getItem("nnstudio_sidebar"), "0", "\u2026and forgets the fold");
 });
 
-check("the + sits right beside the last tab, and its menu drops from it", () => {
-  const h = fs.readFileSync(UI, "utf8");       // the strip's own order
-  const k1 = h.indexOf('id="bxtabrail"'), k2 = h.indexOf('id="bxtabadd"'),
-        k3 = h.indexOf('id="bxtabnote"');
-  ok(k1 >= 0 && k2 > k1 && k3 > k2, "the tabs, then the +, then the note");
-  ok(!/#bxtabMenu\s*\{[^}]*right:\s*0/.test(h),
-     "\u2026and nothing pins its right edge \u2014 no stretched menu");
-  const strip = getEl("bxtabs"), add = getEl("bxtabadd"), men = getEl("bxtabMenu");
-  const keep = { strip: strip.getBoundingClientRect, add: add.getBoundingClientRect,
+check("the sidebar's own order, and the menus that anchor through the head", () => {
+  const h = fs.readFileSync(UI, "utf8");       // the sidebar's own order
+  const k1 = h.indexOf('id="bxrSearch"'), k2 = h.indexOf('id="bxlist"'),
+        k3 = h.indexOf('id="bxtabnote"'), k4 = h.indexOf('id="bxtTheme"');
+  ok(k1 >= 0 && k2 > k1 && k3 > k2 && k4 > k3,
+     "the search door, the list, the note, the theme \u2014 top to bottom");
+  ok(h.indexOf('id="bxtabrail"') < 0 && h.indexOf('id="bxtabadd"') < 0 &&
+     h.indexOf('id="bxtabMenu"') < 0,
+     "the old strip, its + and its menu are gone");
+  ok(h.indexOf("\u2318K") >= 0, "\u2026and the search door wears the \u2318K badge");
+  ok(/.bxswitcher\s*\{[^}]*width:\s*min\(560px/.test(h),
+     "the switcher dialog is the chat's, 560px wide");
+  // the palette menu anchors under its own button in the head, never stretched
+  const tools = getEl("bxtools"), btn = getEl("bxtPalette"), men = getEl("bxtPalMenu");
+  const keep = { tools: tools.getBoundingClientRect, btn: btn.getBoundingClientRect,
                  w: men.offsetWidth };
-  strip.getBoundingClientRect = () => ({ left: 40, top: 0, width: 900, height: 30 });
-  add.getBoundingClientRect = () => ({ left: 240, top: 0, width: 24, height: 24 });
+  tools.getBoundingClientRect = () => ({ left: 40, top: 0, width: 900, height: 48 });
+  btn.getBoundingClientRect = () => ({ left: 240, top: 0, width: 24, height: 24 });
   men.offsetWidth = 180;
-  __t.bxtabToggle();
-  eql(men.style.left, "200px", "its menu lines up with the +: " + men.style.left);
+  __t.bxtPaletteToggle();
+  eql(men.style.left, "200px", "its menu lines up with the button: " + men.style.left);
   __t.bxtDropsClose();
-  add.getBoundingClientRect = () => ({ left: 880, top: 0, width: 24, height: 24 });
-  __t.bxtabToggle();
-  eql(men.style.left, "714px", "\u2026and stops at the strip\u2019s right edge");
+  btn.getBoundingClientRect = () => ({ left: 880, top: 0, width: 24, height: 24 });
+  __t.bxtPaletteToggle();
+  eql(men.style.left, "714px", "\u2026and stops at the head\u2019s right edge");
   __t.bxtDropsClose();
-  strip.getBoundingClientRect = keep.strip;    // the stubs go back untouched
-  add.getBoundingClientRect = keep.add;
+  tools.getBoundingClientRect = keep.tools;    // the stubs go back untouched
+  btn.getBoundingClientRect = keep.btn;
   men.offsetWidth = keep.w;
 });
 
@@ -6298,8 +6323,8 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   ok(await __t.bxKeyGet("u_1"), "the derived key is in the shared IndexedDB cache");
   // saving: the design travels sealed, into the account's store
   __t.bxAdd("input", 40, 40, { dout: 8 });     // something worth keeping
-  const tab = __t.bxProject();
-  ok(tab && tab.dirty, "the edit starred the project tab");
+  const proj = __t.bxProject();
+  ok(proj && proj.dirty, "the edit starred the project canvas");
   __t.bxTabSave();                             // Ctrl+S on a never-saved project
   const f2 = getEl("bxmenu");
   ok(!f2.hidden && f2.querySelectorAll(".bxinp")[0].value === "design 1",
@@ -6308,9 +6333,9 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   f2.querySelectorAll(".chip").find(c => String(c.textContent) === "save").click();
   ok(await until(() => server.rows.length === 1), "the sealed record lands in the store");
   await flush();
-  eql([tab.name, tab.dirty], ["my canvas", false],
-     "\u2026and the tab takes the name, star gone");
-  ok(String(tab.canvas).indexOf("c_") === 0, "\u2026and the record id it was saved under");
+  eql([proj.name, proj.dirty], ["my canvas", false],
+     "\u2026and the canvas takes the name, star gone");
+  ok(String(proj.canvas).indexOf("c_") === 0, "\u2026and the record id it was saved under");
   const sync1 = server.sent.find(s => s.url === "/chat/auth/store/sync" &&
                                      s.body.canvases && s.body.canvases.upserts.length === 1);
   ok(sync1, "the save rides the canvases delta alone");
@@ -6324,7 +6349,7 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   // saving again is silent, and lands on the same record
   __t.bxMenuClose();
   __t.bxAdd("layer", 260, 40, {});
-  ok(tab.dirty, "a further edit stars the tab again");
+  ok(proj.dirty, "a further edit stars the canvas again");
   __t.bxTabSave();
   ok(getEl("bxmenu").hidden, "\u2026a saved project saves with no dialog");
   ok(await until(() => server.rows.length === 1 && server.rows[0].updatedAt &&

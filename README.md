@@ -105,18 +105,22 @@ unlocks the other. A localStorage hint ("a sign-in may be live") lets a cold
 boot skip the `/auth/me` round trip for guests; the server always has the last
 word. (The old `nnstudio_token` in localStorage is removed on load.)
 
-Designs are saved from the **project tabs** under the toolbar: `Ctrl/Cmd+S`
-saves the active one (a new project asks for its name first), the `+` at the
-strip's right opens **New Canvas**, **AI agent** or your **Saved Canvas**
-list — each saved canvas opens as its own tab, and its `×` closes it (asking
-first when it holds unsaved changes; a reload or close with unsaved tabs asks
-too). The last tab wears no `×` — there is always one tab open. **AI agent**
-opens a tab that is not a canvas: the reverse-engineering agent, spoken to
-(see **The AI agent tab** below). The canvas tabs you leave open come back on
+Designs are saved from the **sidebar** at the canvas's left, which lists the
+open canvases: `Ctrl/Cmd+S` saves the active one (a new project asks for its
+name first), the `+` above the list makes a blank canvas straight away, and
+the `⌘K` search door is the **switcher** — **New canvas**, **AI agent** and
+your saved canvases (each opens as its own canvas; saving over a name
+replaces it) — with the open canvases beneath, so a jump between them needs
+no mouse. Each canvas's `×` closes it (asking first when it holds unsaved
+changes; a reload or close with unsaved canvases asks too). The last canvas
+wears no `×` — there is always one canvas open. **AI agent** opens one that
+is a conversation, not a canvas: the reverse-engineering agent, spoken to
+(see **The AI agent canvas** below). The canvases you leave open come back on
 your next visit — the list of them (with the one that was on screen) is the
 account's sealed `session` record in its store, on the backend like everything
 else, so any device that signs in and unlocks lands exactly where the account
-left off (the AI tab is a conversation, not a canvas, so it is not restored).
+left off (the AI canvas is a conversation, not a canvas, so it is not
+restored).
 
 A canvas is one `canvas` record in the account's **end-to-end encrypted
 store** — the same store the Chat half keeps its conversations and studios in
@@ -208,7 +212,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the whole app — the toolbar up top (Palette · Import · Backend — the server config's door, up top of that menu — · VRAM), the project tabs under it (Ctrl/Cmd+S saves; the + opens New Canvas / Saved Canvas; the × closes one — never the last — warning first when it is unsaved), the canvas, the right-click menus; one self-contained page |
+| `ui/index.html` | the whole app — the sidebar at the left (the open canvases, named and dotted; the + makes a blank one; the × closes one — never the last — warning first when it is unsaved; the ⌘K door is the switcher — New canvas / AI agent / the saved list / the jump between them; the chevron folds it to a rail), the toolbar head above the canvas (Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves), the canvas, the right-click menus; one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |
@@ -223,7 +227,7 @@ one stays on the server.
 | `tests/gateway_bridge_test.py` | the in-process ASGI bridge: the scope, streaming in order, a slow client losing nothing, mid-stream failures, the failed startup, and the client-hang-up cancellation |
 | `nn_gateway.py` | the bridge that runs the Chat half's FastAPI gateway inside this process (one event loop, one task per request, cancellation on hang-up) |
 | `tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
-| `tools/chat_job.py` | the AI agent tab's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
+| `tools/chat_job.py` | the AI agent canvas's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
 | `studio/frontend/src/lib/canvasLink.ts` | the session seam, chat side: reads the canvas rows the canvas half seals (a row's key is the AAD its record is sealed under), writes the binding — mints the canvas a session binds to, appends its tab to the shared `session|current` record — and hands the agent the read-only `read_canvas` tool |
 | `studio/` | the Chat half, vendored: AI Studio's React SPA (`frontend/dist` served at `/chat`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
 | `tools/tls_local.sh` | the tiny local CA + server certificate (`.certs/`, git-ignored) for reaching the app over https from your own devices |
@@ -860,9 +864,10 @@ is a **spec**, and a spec is only accepted when it survives a numeric gate.
   every stage is green — the harness catches what reading alone can't (rope
   layout, QK-norm placement, GQA repeat order, mask dtype, v5's tied hidden
   state).
-- **The AI agent tab** is that agent, spoken to. The `+` beside the tabs opens
-  it: a conversation, not a canvas (the palette, Import and VRAM are off while
-  it is the screen; its `×` closes it like any tab). Say *"reverse engineer
+- **The AI agent canvas** is that agent, spoken to. The `⌘K` switcher's
+  **AI agent** entry opens it: a conversation, not a canvas (the palette,
+  Import and VRAM are off while it is the screen; its `×` in the sidebar
+  closes it like any canvas). Say *"reverse engineer
   org/name"* and the first turn's prompt points the agent at the same
   `.opencode/commands/reverse-model.md` workflow; its words, tool calls and
   step markers stream into the thread as they are written. Every message is
@@ -871,7 +876,7 @@ is a **spec**, and a spec is only accepted when it survives a numeric gate.
   the next turn runs with `--session <id>` — so *"why two norms there?"* lands
   in the same context. There are no gates on a chat turn; the agent's own
   tools land what they land (a spec in `specs/`, a row in `hf_arc`). Stop
-  halts the running turn; the thread survives switching tabs.
+  halts the running turn; the thread survives switching canvases.
 - **At run time there is no transformers.** The canvas executes on our engine;
   the spec only shaped it. Families without a verified spec build the older
   role-based skeleton and are labelled `approximate` — a design always says

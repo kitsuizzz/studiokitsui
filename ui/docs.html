@@ -209,19 +209,24 @@
 <section class="card" id="canvas">
   <h1>The canvas: using it</h1>
   <p class="dim">
-    Under the toolbar, a <b>browser-style strip of project tabs</b>: one tab per
-    open canvas, titled with its project name (<i>New Project 1</i> for a blank),
-    a <b>*</b> when there are changes the server has not seen, an <b>×</b> that
-    closes it (it asks first when the changes are not saved — so does leaving
-    the page; the last tab has none, one canvas always stays), and the tabs you
-    leave open come back on your next visit — held in this browser, and, for a
-    signed-in account, sealed at the server too. The
-    <span class="pill grey">+</span> at the right offers
-    <b>New Canvas</b> (a fresh blank, nothing saved yet) and
-    <b>Saved Canvas …</b> (your saved canvases — each opens as its own
-    tab). <b>Ctrl/Cmd+S</b> saves the active project: a new one asks what to
-    name it first; a saved one saves silently (same name, replaced). Above the
-    strip, the toolbar's menus:
+    Beside the canvas, a <b>sidebar lists the open canvases</b>: one line per
+    canvas, titled with its project name (<i>New Project 1</i> for a blank),
+    a small <b>dot</b> when there are changes the server has not seen, an
+    <b>×</b> that closes it (it asks first when the changes are not saved —
+    so does leaving the page; the last canvas has none, one canvas always
+    stays), and the canvases you leave open come back on your next visit —
+    held in this browser, and, for a signed-in account, sealed at the server
+    too. The <span class="pill grey">+</span> above the list makes a blank
+    canvas straight away; the <span class="pill grey">⌘K</span> search door
+    is the <b>switcher</b> — <b>New canvas</b> (a fresh blank, nothing saved
+    yet), <b>AI agent</b> (a conversation, not a canvas) and
+    <b>Saved canvas …</b> (your saved canvases — each opens as its own
+    canvas) up top, and the open canvases beneath, so a jump between them
+    needs no mouse. The chevron in the sidebar's head folds it to a rail of
+    icons, and the fold is remembered. <b>Ctrl/Cmd+S</b> saves the active
+    project: a new one asks what to name it first; a saved one saves silently
+    (same name, replaced). The head above the canvas carries the toolbar's
+    menus:
     <span class="pill grey">Palette ▾</span>
     <span class="pill grey">Import ▾</span> <span class="pill grey">Backend ▾</span>
     <span class="pill grey">VRAM ▾</span> — the
@@ -242,7 +247,7 @@
         card lands one model box), <b>Text</b> (the tokenizer pair),
         <b>Data</b> (the select col box — a dataset is an input's datatype
         now), <b>Training</b> (the training
-        box \u2014 a model in its slot, datasets on its dots \u2014 the train
+        box — a model in its slot, datasets on its dots — the train
         config, and the two signals it can use: a loss box and a reward box),
         <b>Analysis</b> (the heatmap) and <b>AI</b> (the agent). The canvas's
         right-click menu is the same nine shelves.</li>
@@ -278,9 +283,9 @@
         names it and says what it emits or expects; a
         <span class="pill">custom</span> box shows the input/output boxes its dots
         stand for (hover one dot to read just that box). The ends must agree:
-        a wire is <b>refused \u2014 and the canvas says why</b> \u2014 when the
+        a wire is <b>refused — and the canvas says why</b> — when the
         sides differ on the kind of data (<code>text</code> into a numbers box,
-        a sheet into a tensor) or on the shape (<code>[? \u00d7 3]</code> into a
+        a sheet into a tensor) or on the shape (<code>[? × 3]</code> into a
         width-8 dot); a mismatch that appears later, after a resize, goes red
         with the same words on its hover. Right-click a wire to
         reshape or remove it.</li>
@@ -390,9 +395,9 @@
     canvas → <b>the design</b> exports it (a <code>.json</code> file), imports
     one back, and exports the whole design's weights. Design JSON nests: a nested
     box carries its own network inside the file, so one file can hold a whole
-    model. <b>There is no autosave</b>: the tabs live in this page, so a reload
-    starts a fresh <i>New Project 1</i> — <b>Ctrl/Cmd+S</b> is how a design
-    outlives it (saving takes an account, below).
+    model. <b>There is no autosave</b>: what a reload loses is whatever was
+    never saved — <b>Ctrl/Cmd+S</b> is how a design outlives the page
+    (saving takes an account, below).
   </p>
   <p>
     <b>Everyone starts a guest.</b> A guest draws, wires and runs like anyone;
@@ -404,9 +409,9 @@
     then this browser makes a token — 32 random bytes, shown once — and the
     token is the whole login. Anywhere else, <i>log in with a token</i> and
     paste it. Signed in, <b>Ctrl/Cmd+S</b> saves the active project — sealed in
-    this browser first — and the <span class="pill grey">+</span> beside the
-    tabs lists what was saved, each opening as its own tab; saving over a name
-    replaces it. The account menu keeps the account itself: who is signed in,
+    this browser first — and the <span class="pill grey">⌘K</span> door's
+    <b>Saved canvas …</b> entry lists what was saved, each opening as its own
+    canvas; saving over a name replaces it. The account menu keeps the account itself: who is signed in,
     unlock, log out.
   </p>
   <p>
@@ -877,37 +882,37 @@
   <div class="boxref">
     <div>
       <div class="bname">training</div>
-      <div class="bwires">3 in (train, test, validation) \u00b7 1 out (the result)</div>
+      <div class="bwires">3 in (train, test, validation) · 1 out (the result)</div>
     </div>
     <div class="bdet">
       <p>The whole run in one box: its top edge steps in to a <b>slot</b> cut to
-      the model's own card \u2014 empty, it shows a dashed ghost of a model
+      the model's own card — empty, it shows a dashed ghost of a model
       sitting in the socket; once one is in, the outline closes to a clean
-      rectangle \u2014 drop a <span class="pill">model</span> box into it and
+      rectangle — drop a <span class="pill">model</span> box into it and
       that architecture is what trains. Drag the model onto the notch: it docks
       (and snaps into the socket); the model picker in its window does the same
-      thing. The box and its model travel as one unit \u2014 drag either and both
+      thing. The box and its model travel as one unit — drag either and both
       move; seated, the model's side dots give way to one <b>release dot at its
-      foot</b> \u2014 click it and the model pops out of the socket (right-click
-      \u2192 <i>undock the model</i> does the same), and a model card dropped
+      foot</b> — click it and the model pops out of the socket (right-click
+      → <i>undock the model</i> does the same), and a model card dropped
       straight from the Palette docks on the way in. Its three dots take
       <b>datasets</b>, in order: <b>train</b> (the rows
-      it learns on), <b>test</b> and <b>validation</b> (hold-outs, scored \u2014
+      it learns on), <b>test</b> and <b>validation</b> (hold-outs, scored —
       never trained). Wire an input whose datatype is <code>dataset</code>, or a
-      legacy dataset box, into any of them \u2014 hover a dot and it explains its
+      legacy dataset box, into any of them — hover a dot and it explains its
       own purpose.</p>
       <p>Everything else lives in its window, exactly like a train config's
-      \u2014 except the model picker, the paradigm select and the test/validation pickers, which a Training
+      — except the model picker, the paradigm select and the test/validation pickers, which a Training
       box does not carry at all: the slot claims the model, the box trains
       as its field says, and the splits come off its dots (a train config box
       still carries all of them). The x/y
       columns, the class switch, optimizer, learning rate,
-      batch, steps, save/eval cadence \u2014 and the same experiment readout, with
-      the live step, loss, test and validation numbers. The <b>\u25b6 start
+      batch, steps, save/eval cadence — and the same experiment readout, with
+      the live step, loss, test and validation numbers. The <b>▶ start
       training</b> button sits in a footer of its own at the window's bottom
-      left \u2014 like the input's run button (a Training box keeps its start
+      left — like the input's run button (a Training box keeps its start
       there instead of in the panel's chip row; once the task is live the same
-      footer reads <i>training\u2026</i> and the panel's save / hold / detach
+      footer reads <i>training…</i> and the panel's save / hold / detach
       chips drive it). A training task runs from here, and the result also rides out of
       its dot: a little <code>[loss, acc]</code> the run leaves behind, so you
       can wire it anywhere and watch it.</p>

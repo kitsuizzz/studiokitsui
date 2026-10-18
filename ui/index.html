@@ -33,6 +33,7 @@
     --s-grid: rgba(255,255,255,.045);       /* the canvas's lattice */
     --s-grid2: rgba(255,255,255,.085);
     --s-shadow: rgba(0,0,0,.45);
+    --wall-pad: clamp(24px, 6vw, 96px);   /* the chat's content inset: head and board */
     --font-label: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     --font-work: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
     --font-mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -471,7 +472,7 @@
   .bxpform .rf span { color: #9aa2aa; min-width: 80px; }
   .bxpfoot { padding: 4px 8px; border-top: 1px solid #262b30; color: #8a9199;
              white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* the AI agent tab: a conversation surface where the canvas would be */
+  /* the AI agent canvas: a conversation where a drawing would be */
   .bxtalk { position: absolute; inset: 0; z-index: 5; display: flex;
             justify-content: center; background: #14171a; }
   .bxtalkwrap { display: flex; flex-direction: column; width: 100%;
@@ -1038,40 +1039,8 @@ header { padding: 18px 16px 10px; flex: 0 0 auto; }
          font: 12px var(--mono); color: var(--ink); white-space: nowrap; }
 .bxtmi:hover { background: rgba(255,255,255,.07); }
 .bxtspace { flex: 1 1 auto; }
-/* the project tabs: a browser-style strip under the toolbar */
-.bxtabs { position: relative; display: flex; align-items: flex-end; gap: 6px;
-          padding: 0 2px; margin: 0 0 10px; border-bottom: 1px solid var(--panel-brd); }
-.bxtabrail { display: flex; align-items: flex-end; gap: 3px; min-width: 0;
-             overflow: hidden; }
-.bxtab { display: flex; align-items: center; gap: 7px; cursor: pointer;
-         font: 600 12px var(--mono); color: var(--ink-dim); max-width: 240px;
-         padding: 6px 14px 7px; border: 1px solid var(--panel-brd);
-         border-bottom: none; background: rgba(0,0,0,.18); white-space: nowrap;
-         user-select: none; transition: color .15s, background .15s; }
-.bxtab:hover { color: var(--ink); }
-.bxtab.on { color: var(--accent); background: rgba(249,115,22,.08); }
-.bxtab .nm { overflow: hidden; text-overflow: ellipsis; }
-.bxtab .star { color: var(--warm); }
-.bxtab .x { color: var(--ink-faint); font: 700 12px var(--mono);
-            padding: 0 2px; margin-left: 2px; }
-.bxtab .x:hover { color: var(--err); }
-.bxtabnote { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-             white-space: nowrap; color: var(--ink-faint); font: 11px var(--mono);
-             padding: 0 8px 6px; }
-.bxtabadd { cursor: pointer; color: var(--ink-dim); font: 700 15px var(--mono);
-            padding: 2px 12px 4px; border: 1px solid var(--panel-brd);
-            border-bottom: none; background: rgba(0,0,0,.18); user-select: none; }
-.bxtabadd:hover { color: var(--warm); border-color: rgba(251,191,36,.5); }
-#bxtabMenu { top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 248px; }
-#bxtabMenu .bxlist { display: flex; flex-direction: column; gap: 4px;
-                     max-height: 260px; overflow: auto; margin: 2px 0; }
-#bxtabMenu .bxlist .rowl { display: flex; align-items: center; gap: 8px;
-                           padding: 5px 7px; border: 1px solid var(--panel-brd);
-                           cursor: pointer; background: rgba(0,0,0,.25); }
-#bxtabMenu .bxlist .rowl:hover { background: rgba(255,255,255,.06); }
-#bxtabMenu .bxlist .rowl .nm { flex: 1 1 auto; min-width: 0; overflow: hidden;
-                               text-overflow: ellipsis; white-space: nowrap; }
-#bxtabMenu .bxlist .rowl .dt { color: var(--ink-faint); font: 11px var(--mono); }
+/* the project tabs retired here — v2 lists the open canvases in the sidebar,
+   in the chat half's skin (the shell rules below) */
 /* the Palette menu: its categories, expanding into the box cards themselves */
 #bxtPalMenu { min-width: 384px; }
 .bxtcat { display: flex; align-items: center; gap: 6px; cursor: pointer;
@@ -1171,24 +1140,7 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   .bxpalitem { border-radius: 0; }
   .bxpalitem:hover { background: var(--s-wall2); }
 
-  /* ---- the project tabs: wall labels ---- */
-  .bxtabs { border-bottom: 1px solid var(--s-hair); }
-  .bxtabrail { gap: 0; align-items: stretch; }
-  .bxtab { padding: 0 13px; height: 31px; border-radius: 0; border: 0;
-           border-right: 1px solid var(--s-hair); font-size: 12.5px;
-           color: var(--s-label2); background: transparent; }
-  .bxtab:hover { color: var(--s-text); }
-  .bxtab.on { color: var(--s-text); background: transparent; }
-  .bxtab.on .nm::before { content: ""; display: inline-block; width: 5px; height: 5px;
-                          border-radius: 50%; background: var(--s-dot);
-                          margin-right: 7px; vertical-align: 2px; }
-  .bxtab .star { color: var(--s-dot); }
-  .bxtab .x { color: var(--s-label2); }
-  .bxtab .x:hover { color: var(--s-text); }
-  .bxtab.ai .nm { color: var(--s-dot); }
-  .bxtabadd { border: 0; background: transparent; color: var(--s-label2); font-weight: 500; }
-  .bxtabadd:hover { color: var(--s-text); border-color: transparent; }
-  .bxtabnote { font-size: 12px; color: var(--s-label2); padding-left: 12px; }
+  /* ---- the project tabs retired to the sidebar (the shell rules below) ---- */
 
   /* ---- the floating menu and its forms ---- */
   .bxmenu { background: var(--s-wall); border: 1px solid var(--s-hair2); border-radius: 0;
@@ -1265,7 +1217,7 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   .bxprow { padding: 4px 0; }
   .bxpbody .bxbhint { font-family: var(--font-label); }
 
-  /* ---- the AI agent tab: the talk surface ---- */
+  /* ---- the AI agent canvas: the talk surface ---- */
   .bxtalk { background: var(--s-wall); }
   .bxtalkin { background: var(--s-wall2); border: 1px solid var(--s-hair2); border-radius: 0;
               color: var(--s-text); font: 12px/1.5 var(--font-mono); }
@@ -1353,21 +1305,121 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   .bxtip .shp, .bxtip .row { color: var(--s-label); }
   .bxtip .note { color: var(--s-label2); }
 
-  /* ---- the shell: the rail, the head — the mockup's composition ---- */
+  /* ---- the shell: the sidebar, the head — the chat half's composition ---- */
   main { padding: 0; gap: 0; }
-  .bxrail { flex: none; width: 56px; border-right: 1px solid var(--s-hair);
-            display: flex; flex-direction: column; align-items: center;
-            gap: 20px; padding: 16px 0; background: var(--s-wall); }
-  .bxrail .ri { position: relative; width: 30px; height: 30px; display: grid;
-                place-items: center; font-size: 14px; color: var(--s-label2);
-                cursor: pointer; user-select: none; border: 0; background: transparent; }
-  .bxrail .ri:hover { color: var(--s-text); }
-  .bxrail .ri.on { color: var(--s-text); }
-  .bxrail .ri.on::after { content: ""; position: absolute; bottom: -9px; width: 4px;
-                          height: 4px; border-radius: 50%; background: var(--s-dot); }
-  .bxrail .bxrspace { flex: 1 1 auto; }
-  .view { padding: 10px 14px 14px; }
-  .bxtools { height: 48px; gap: 12px; margin: 0 0 6px; align-items: center; }
+  .bxsidebar { flex: none; width: 260px; min-width: 0;
+               border-right: 1px solid var(--s-hair); background: var(--s-wall);
+               display: flex; flex-direction: column; transition: width .2s ease; }
+  .bxsidebar.collapsed { width: 56px; }
+  .bxsidebar.collapsed .bxside-text, .bxsidebar.collapsed .bxside-search kbd {
+    display: none; }
+  .bxside-head { flex: none; height: 48px; display: flex; align-items: center;
+                 justify-content: space-between; gap: 8px;
+                 padding: 0 8px 0 20px; border-bottom: 1px solid var(--s-hair); }
+  .bxside-head .bxrspace { flex: 1 1 auto; }
+  .bxsidebtn { width: 32px; height: 32px; display: grid; place-items: center;
+               color: var(--s-label2); cursor: pointer; user-select: none;
+               border: 0; background: transparent;
+               transition: color .15s, background-color .15s; }
+  .bxsidebtn:hover { color: var(--s-text); background: var(--s-wall2); }
+  .bxsidebtn svg { width: 15px; height: 15px; }
+  .bxsidebtn .bxs-chev-r { display: none; }
+  .bxsidebar.collapsed .bxside-head { justify-content: center; padding: 0; }
+  .bxsidebar.collapsed .bxs-chev-l { display: none; }
+  .bxsidebar.collapsed .bxsidebtn .bxs-chev-r { display: block; }
+  .bxsidebar.collapsed .bxs-tool { display: none; }
+  .bxside-new { flex: none; display: flex; align-items: center; justify-content: center;
+                gap: 8px; height: 36px; margin: 16px 16px 8px; padding: 0 12px;
+                border: 1px solid var(--s-text); background: var(--s-text);
+                color: var(--s-wall); font: 500 13px var(--font-label);
+                cursor: pointer; user-select: none;
+                transition: background-color .15s, border-color .15s, color .15s; }
+  .bxside-new:hover { background: var(--s-dot); border-color: var(--s-dot);
+                      color: #fff; }
+  .bxside-new svg { width: 15px; height: 15px; flex: none; }
+  .bxsidebar.collapsed .bxside-new { margin: 16px 10px 6px; padding: 0; }
+  .bxside-search { flex: none; display: flex; align-items: center; gap: 8px;
+                   height: 32px; margin: 0 16px 12px; padding: 0 10px;
+                   border: 1px solid var(--s-hair); color: var(--s-label2);
+                   font: 400 12.5px var(--font-label); cursor: pointer;
+                   user-select: none; transition: color .15s, border-color .15s; }
+  .bxside-search:hover { color: var(--s-text); border-color: var(--s-hair2); }
+  .bxside-search svg { width: 13px; height: 13px; flex: none; }
+  .bxside-search kbd { margin-left: auto; font: 11px var(--font-mono);
+                       color: var(--s-label3); }
+  .bxsidebar.collapsed .bxside-search { justify-content: center; margin: 0 10px 8px;
+                                        padding: 0; }
+  .bxlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0; }
+  .bxcitem { position: relative; display: flex; align-items: center; gap: 8px;
+             padding: 8px 12px 8px 18px; border-left: 2px solid transparent;
+             color: var(--s-label); cursor: pointer;
+             transition: background-color .12s, color .12s; }
+  .bxcitem:hover { background: var(--s-wall2); color: var(--s-text); }
+  .bxcitem.on { background: var(--s-wall2); border-left-color: var(--s-dot);
+                color: var(--s-text); }
+  .bxctile { display: none; width: 26px; height: 26px; flex: none;
+             place-items: center; border: 1px solid var(--s-hair2);
+             font: 500 12px var(--font-mono); color: var(--s-label); }
+  .bxctile .bxtdot { width: 6px; height: 6px; border-radius: 50%;
+                     background: var(--s-dot); }
+  .bxctitle { flex: 1 1 auto; min-width: 0; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap;
+              font: 400 15px var(--font-work); }
+  .bxcitem.ai .bxctitle { color: var(--s-dot); }
+  .bxclose { flex: none; opacity: 0; color: var(--s-label2);
+             font: 700 12px var(--font-mono); padding: 0 2px;
+             transition: color .12s, opacity .12s; }
+  .bxcitem:hover .bxclose { opacity: 1; }
+  .bxclose:hover { color: var(--s-danger); }
+  .bxsidebar.collapsed .bxcitem { justify-content: center; padding: 6px 0;
+                                   border-left-color: transparent; }
+  .bxsidebar.collapsed .bxctile { display: grid; }
+  .bxsidebar.collapsed .bxcitem.on .bxctile { border-color: var(--s-text);
+                                               background: var(--s-text);
+                                               color: var(--s-wall); }
+  .bxside-foot { flex: none; border-top: 1px solid var(--s-hair); }
+  .bxtabnote { display: none; padding: 8px 20px 0; color: var(--s-label2);
+               font: 11px/1.5 var(--font-mono); }
+  .bxtabnote.on { display: block; }
+  .bxside-link { display: flex; align-items: center; gap: 10px; width: 100%;
+                 padding: 8px 20px; border: 0; background: transparent;
+                 color: var(--s-label); font-size: 13px; cursor: pointer;
+                 transition: color .15s, background-color .15s; }
+  .bxside-link:hover { color: var(--s-text); background: var(--s-wall2); }
+  .bxsidebar.collapsed .bxside-link { justify-content: center; padding: 8px 0; }
+  .view { padding: 0; }
+  .bxtools { height: 48px; gap: 12px; margin: 0; align-items: center;
+             padding: 0 var(--wall-pad); border-bottom: 1px solid var(--s-hair); }
+  .bxrow { padding: 10px var(--wall-pad) 14px; }
+  /* the switcher: the ⌘K door, the chat half's pattern over the wall */
+  .bxswitch-backdrop { position: fixed; inset: 0; z-index: 60;
+                       display: flex; align-items: flex-start;
+                       justify-content: center; padding-top: 14vh;
+                       background: rgba(22,22,22,.28); }
+  .bxswitcher { width: min(560px, calc(100vw - 32px));
+                background: var(--s-wall); border: 1px solid var(--s-hair2);
+                box-shadow: 0 18px 40px var(--s-shadow); }
+  .bxswitch-input { display: flex; align-items: center; gap: 10px;
+                    padding: 14px 16px; border-bottom: 1px solid var(--s-hair);
+                    color: var(--s-label2); }
+  .bxswitch-input svg { width: 16px; height: 16px; flex: none; }
+  .bxswitch-input input { flex: 1 1 auto; min-width: 0; background: none;
+                           border: 0; outline: 0; font: 400 16px var(--font-label);
+                           color: var(--s-text); }
+  .bxswitch-input input::placeholder { color: var(--s-label3); }
+  .bxswitch-list { list-style: none; margin: 0; padding: 6px 0;
+                   max-height: 50vh; overflow-y: auto; }
+  .bxswitch-list li { display: flex; align-items: baseline;
+                      justify-content: space-between; gap: 12px;
+                      padding: 9px 16px; font: 400 15px var(--font-work);
+                      color: var(--s-text); cursor: pointer; }
+  .bxswitch-list li:hover, .bxswitch-list li.sel { background: var(--s-wall2); }
+  .bxswitch-list li.dim { color: var(--s-label2); cursor: default; }
+  .bxswitch-label { min-width: 0; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+  .bxswitch-hint { flex: none; font: 500 11px var(--font-mono);
+                   letter-spacing: .1em; text-transform: uppercase;
+                   color: var(--s-label2); }
   .bxheadtitle { font: 500 15px/1.3 var(--font-label); color: var(--s-text);
                  letter-spacing: .01em; max-width: 46vw; overflow: hidden;
                  text-overflow: ellipsis; white-space: nowrap; }
@@ -1384,7 +1436,7 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
                        border: 1px solid var(--s-hair2); }
   .bxuserbtn .bxucar { margin-left: 2px; }
 
-  .chip, .bxtbtn, .mode, .bxtab, .bxbbtn, .bxtmi, .bxmenu .mi, .bxtcat {
+  .chip, .bxtbtn, .mode, .bxbbtn, .bxtmi, .bxmenu .mi, .bxtcat {
     transition: color .15s, border-color .15s, background .15s, opacity .15s;
   }
   /* a theme flip eases, the way chat.kitsui's does (the class lives on <html>
@@ -1425,12 +1477,48 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
 </header>
 
 <main>
-  <aside class="bxrail" id="bxrail">
-    <span class="ri" id="bxrNew" title="a new canvas">＋</span>
-    <span class="ri on" id="bxrCanvas" title="the canvas — fit the design">▦</span>
-    <span class="ri" id="bxrAgent" title="the AI agent — a conversation, not a canvas">◧</span>
-    <span class="bxrspace"></span>
-    <span class="ri" id="bxtTheme" title="light / dark">☾</span>
+  <aside class="bxsidebar" id="bxsidebar">
+    <div class="bxside-head">
+      <span class="bxsidebtn" id="bxsCollapse" title="collapse the sidebar">
+        <svg class="bxs-chev-l" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m15 18-6-6 6-6"/></svg>
+        <svg class="bxs-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"/></svg>
+      </span>
+      <span class="bxrspace"></span>
+      <span class="bxsidebtn bxs-tool" id="bxrAgent" title="the AI agent — a conversation, not a canvas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+      </span>
+      <span class="bxsidebtn bxs-tool" id="bxrCanvas" title="the canvas — fit the design">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </span>
+    </div>
+    <span class="bxside-new" id="bxrNew" title="a new canvas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      <span class="bxside-text">New canvas</span>
+    </span>
+    <span class="bxside-search" id="bxrSearch" title="search your canvases — the ⌘K door">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <span class="bxside-text">Search</span><kbd>⌘K</kbd>
+    </span>
+    <div class="bxlist" id="bxlist"></div>
+    <div class="bxside-foot">
+      <div class="bxtabnote" id="bxtabnote"></div>
+      <span class="bxside-link" id="bxtTheme" title="light / dark">
+        <span class="bxtheme-ico">☀</span><span class="bxside-text">Light theme</span>
+      </span>
+    </div>
   </aside>
   <section id="view-training" class="view">
     <div class="bxtools" id="bxtools">
@@ -1452,12 +1540,6 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
         <div class="bxvram" id="bxvram"></div>
       </div>
     </div>
-    <div class="bxtabs" id="bxtabs">
-      <div class="bxtabrail" id="bxtabrail"></div>
-      <span class="bxtabadd" id="bxtabadd" title="open another canvas">+</span>
-      <span class="bxtabnote" id="bxtabnote"></span>
-      <div class="bxtdrop" id="bxtabMenu" hidden></div>
-    </div>
     <div class="bxrow">
       <div class="bxwrap" id="bxwrap">
         <div class="flowsvg" id="bxcanvas"></div>
@@ -1473,6 +1555,17 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
     </div>
   </section>
 </main>
+<div class="bxswitch-backdrop" id="bxswitchBack" hidden>
+  <div class="bxswitcher" id="bxswitcher">
+    <div class="bxswitch-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="bxswitchQuery" type="text" placeholder="Search your canvases" />
+    </div>
+    <ul class="bxswitch-list" id="bxswitchList"></ul>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -1481,6 +1574,14 @@ const $ = id => document.getElementById(id);
 try {
   if (localStorage.getItem("nnstudio_theme") === "light")
     document.documentElement.setAttribute("data-theme", "light");
+} catch (e) {}
+
+// v2 · the remembered sidebar state lands before anything draws
+try {
+  if (localStorage.getItem("nnstudio_sidebar") === "1") {
+    const s = document.getElementById("bxsidebar");
+    if (s && s.classList) s.classList.add("collapsed");
+  }
 } catch (e) {}
 
 // Tiny element builder: mk("div", {class: "x", text: "hi", onclick: fn}, kid...)
@@ -1602,7 +1703,7 @@ function bxCommit(keep) {
   if (bxUndoStack.length > 60) bxUndoStack.shift();
   bxUndoLast = text;
   bxRedoStack = [];
-  bxTabDirty();                                // the tab wears its star
+  bxTabDirty();                                // the canvas wears its star
 }
 function bxRestore(snap, path) {
   const targetPath = path || snap.path || [];
@@ -8141,13 +8242,13 @@ function bxtExport() { return bxtForm("export"); }
 function bxtImport() { return bxtForm("import"); }
 function bxtDropsClose(keep) {
   for (const id of ["bxtPalMenu", "bxtImportMenu", "bxtBackendMenu",
-                    "bxtVramMenu", "bxtAccountMenu", "bxtabMenu"]) {
+                    "bxtVramMenu", "bxtAccountMenu"]) {
     if (id === keep) continue;
     const m = $(id);
     if (m) m.hidden = true;
   }
 }
-function bxtPlace(menuId, btnId, hostId) {     // under its own button, not the strip's left
+function bxtPlace(menuId, btnId, hostId) {     // under its own button, never stretched
   if (!btnId) return;
   const m = $(menuId), b = $(btnId), w = $(hostId || "bxtools");
   if (!m || !b || !w || !m.style) return;
@@ -8451,7 +8552,7 @@ async function bxAccountSignedIn(user) {
     bxPlaceNow("studio");                      // the canvas: this is where we are
   }
   bxAccountSync();
-  if (!BXSESSION.restored) {                   // the tabs come back where they
+  if (!BXSESSION.restored) {                   // the canvases come back where they
     BXSESSION.restored = true;                 // were — once per page
     bxSessionRestore().then(() => { bxSplash(false); bxSessionPush(); })
                       .catch(() => bxSplash(false));
@@ -8530,7 +8631,7 @@ function bxAccountBuild() {
   item("signed in as " + BXACCT.name, "", null, true);
   item("save · Ctrl+S, any time", "the active project, sealed in this browser first",
        null, true);
-  item("open · the + beside the tabs", "saved canvases, each in its own tab",
+  item("open · the \u2318K switcher", "saved canvases, each in its own canvas",
        null, true);
   item("log out", "this browser forgets the session and the key it held",
        () => { bxtDropsClose(); bxAccountLogout(); });
@@ -8811,7 +8912,7 @@ function bxAccountSaveForm(onSaved, given) {
     if (!name) { status.textContent = "the design needs a name"; return; }
     bxAccountSave(name, design, status, go, (savedName, id) => {
       saved = true;
-      if (onSaved) onSaved(savedName, id);     // the tab takes the name it was saved under
+      if (onSaved) onSaved(savedName, id);     // the canvas takes the name it was saved under
     });
   });
   bxAccountPlace();
@@ -9118,7 +9219,7 @@ async function bxSessionRestore() {            // at sign-in: open what was open
   BXSESSION.hold = false;
   return opened > 0;
 }
-let BXTAB = { msg: "", view: "main" };         // the note line, and the + menu's view
+let BXTAB = { msg: "", view: "main", cursor: 0 }; // the note, the switcher's view, its cursor
 let bxTabSeq = 1;                              // the next "New Project N"
 
 function bxProject(id) {
@@ -9159,7 +9260,7 @@ function bxTabLoad(p, doc) {                   // a tab → the screen
     bxTabsSay(String((ok && ok.error) || "that canvas cannot be opened"));
     return false;
   }
-  if (p.undo) bxUndoStack = p.undo;            // the tab keeps its own history
+  if (p.undo) bxUndoStack = p.undo;            // the canvas keeps its own history
   else { bxUndoStack = [bxSnapshotNow()]; bxUndoLast = JSON.stringify(bxUndoStack[0]); }
   bxRedoStack = p.redo || [];
   if (p.undoLast != null) bxUndoLast = p.undoLast;
@@ -9312,21 +9413,25 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
   }, p);
   return true;
 }
-function bxTabsRender() {                      // the strip, its stars, the note
-  const rail = $("bxtabrail");
-  if (!rail) return;
-  rail.innerHTML = "";
+function bxTabsRender() {                      // the sidebar's list, its dots, the note
+  const list = $("bxlist");
+  if (!list) return;
+  list.innerHTML = "";
   for (const p of BX.projects || []) {
-    const t = mk("div", { class: "bxtab" + (p.id === BX.active ? " on" : "")
+    const t = mk("div", { class: "bxcitem" + (p.id === BX.active ? " on" : "")
                                  + (p.kind === "ai" ? " ai" : ""),
                           title: p.kind === "ai"
                             ? "the AI agent \u2014 a conversation, not a canvas"
                             : (p.saved ? "saved \u00b7 " : "not saved yet \u00b7 ") + p.name });
-    t.appendChild(mk("span", { class: "nm", text: p.name }));
+    const tile = mk("span", { class: "bxctile" });
     if (p.dirty)
-      t.appendChild(mk("span", { class: "star", text: "*", title: "changes not saved" }));
-    if ((BX.projects || []).length > 1) {      // the last tab is not removable:
-      const x = mk("span", { class: "x", text: "×", title: "close this project" });
+      tile.appendChild(mk("span", { class: "bxtdot", title: "changes not saved" }));
+    else
+      tile.appendChild(mk("span", { text: String(p.name || "?").charAt(0).toUpperCase() }));
+    t.appendChild(tile);
+    t.appendChild(mk("span", { class: "bxctitle", text: p.name }));
+    if ((BX.projects || []).length > 1) {      // the last canvas is not removable:
+      const x = mk("span", { class: "bxclose", text: "\u00d7", title: "close this project" });
       x.addEventListener("click", (ev) => {
         if (ev && ev.stopPropagation) ev.stopPropagation();
         bxTabClose(p.id);
@@ -9334,11 +9439,14 @@ function bxTabsRender() {                      // the strip, its stars, the note
       t.appendChild(x);
     }
     t.addEventListener("click", () => bxTabSelect(p.id));
-    rail.appendChild(t);
+    list.appendChild(t);
   }
   const note = $("bxtabnote");
-  if (note) note.textContent = BXTAB.msg || "";
-  bxHeadRefresh();                             // the head wears the active tab's name
+  if (note) {
+    note.textContent = BXTAB.msg || "";
+    if (note.classList) note.classList.toggle("on", !!BXTAB.msg);
+  }
+  bxHeadRefresh();                             // the head wears the active canvas's name
 }
 // a page that would take unsaved projects with it asks first (the browser's
 // own guard, on reload or close)
@@ -9350,88 +9458,110 @@ if (typeof window !== "undefined" && window.addEventListener) {
     return "";
   });
 }
-function bxtabToggle() {
-  const m = $("bxtabMenu");
-  if (!m) return false;
-  const open = !!m.hidden;
-  bxtDropsClose("bxtabMenu");
+function bxSwitchToggle() {                     // ⌘K: the door over the wall
+  const b = $("bxswitchBack");
+  if (!b) return false;
+  const open = !!b.hidden;
+  bxtDropsClose();
+  b.hidden = !open;
   if (open) {
     BXTAB.view = "main";
-    bxtabMenuBuild();
+    BXTAB.cursor = 0;
+    const q = $("bxswitchQuery");
+    if (q) { q.value = ""; if (q.focus) q.focus(); }
+    bxSwitchBuild();
   }
-  m.hidden = !open;
-  if (open) bxtPlace("bxtabMenu", "bxtabadd", "bxtabs");   // under the + itself
   return open;
 }
-function bxtabMenuBuild() {                    // the + : New Canvas, Saved Canvas
-  const menu = $("bxtabMenu");
-  if (!menu) return;
-  menu.innerHTML = "";
-  const item = (text, title, fn, dim) => {
-    const it = mk("div", { class: "bxtmi" + (dim ? " dim" : ""), text, title });
+function bxSwitchClose() {
+  const b = $("bxswitchBack");
+  if (b) b.hidden = true;
+  BXTAB.view = "main";
+}
+function bxsToggle() {                          // the sidebar folds, and the choice is remembered
+  const s = $("bxsidebar");
+  if (!s || !s.classList) return;
+  const collapsed = s.classList.toggle("collapsed");
+  try { localStorage.setItem("nnstudio_sidebar", collapsed ? "1" : "0"); } catch (e) {}
+}
+function bxSwitchBuild() {                      // the switcher's list, in its view
+  const list = $("bxswitchList");
+  if (!list) return;
+  const item = (label, hint, fn, dim) => {
+    const it = mk("li", { class: "bxswitch-item" + (dim ? " dim" : "") });
+    it.appendChild(mk("span", { class: "bxswitch-label", text: label }));
+    if (hint) it.appendChild(mk("span", { class: "bxswitch-hint", text: hint }));
     if (fn) it.addEventListener("click", fn);
-    menu.appendChild(it);
+    list.appendChild(it);
     return it;
   };
-  if (BXTAB.view !== "saved") {
-    item("New Canvas", "a fresh blank canvas \u2014 nothing saved yet", () => bxTabNew());
-    item("AI agent", "a conversation with the reverse-engineering agent \u2014 "
-                   + "its own tab, no canvas", () => bxTabNewAI());
-    item("Saved Canvas \u2026", "open one of your saved canvases in its own tab",
-         () => { BXTAB.view = "saved"; bxtabMenuBuild(); });
-    return;
-  }
-  item("\u2190 back", "the two ways in",
-       () => { BXTAB.view = "main"; bxtabMenuBuild(); });
-  if (!BXACCT.user) {
-    item("saving and opening need an account \u2014 create one at the top right",
-         "", null, true);
-    return;
-  }
-  if (BXACCT.locked) {
-    item("the account is locked \u2014 unlock it with your access key", "", null, true);
-    return;
-  }
-  const list = mk("div", { class: "bxlist" });
-  const status = mk("div", { class: "bxtmi dim", text: "reading the list \u2026" });
-  menu.appendChild(list);
-  menu.appendChild(status);
-  if (typeof fetch !== "function") { status.textContent = "the app cannot reach the server"; return; }
-  bxCanvases().then(rows => bxTabSavedRows(list, status, rows))
-              .catch(e => { status.textContent = String((e && e.message) || e); });
-}
-async function bxTabSavedRows(list, status, rows) {
   list.innerHTML = "";
-  if (!rows.length) {
-    status.textContent = "nothing saved yet \u2014 Ctrl+S saves this canvas";
-    return true;
+  BXTAB.cursor = 0;
+  const ql = String(($("bxswitchQuery") || {}).value || "").trim().toLowerCase();
+  if (BXTAB.view === "saved") {
+    item("\u2190 back", "", () => { BXTAB.view = "main"; bxSwitchBuild(); });
+    if (!BXACCT.user) {
+      item("saving and opening need an account \u2014 create one at the top right",
+           "", null, true);
+      return;
+    }
+    if (BXACCT.locked) {
+      item("the account is locked \u2014 unlock it with your access key", "", null, true);
+      return;
+    }
+    const status = item("reading the list \u2026", "", null, true);
+    if (typeof fetch !== "function") {
+      status.children[0].textContent = "the app cannot reach the server";
+      return;
+    }
+    bxCanvases().then((rows) => {
+      const back = $("bxswitchBack");
+      if (!back || back.hidden || BXTAB.view !== "saved") return;    // the door closed meanwhile
+      list.innerHTML = "";
+      BXTAB.cursor = 0;
+      item("\u2190 back", "", () => { BXTAB.view = "main"; bxSwitchBuild(); });
+      if (!rows.length)
+        item("nothing saved yet \u2014 Ctrl+S saves this canvas", "", null, true);
+      rows.forEach((r) => {
+        const row = item(r.name, bxWhen(r.updatedAt), () => {
+          if (!r.design) {
+            if (row.children[0]) row.children[0].textContent = "that canvas could not be opened";
+            return;
+          }
+          if (bxTabOpenSaved(r.name, r.design, r.id, r.session)) bxSwitchClose();
+          else if (row.children[0]) row.children[0].textContent = "that canvas could not be opened";
+        });
+      });
+    }).catch((e) => {
+      const back = $("bxswitchBack");
+      if (!back || back.hidden) return;
+      if (status.children[0]) status.children[0].textContent = String((e && e.message) || e);
+    });
+    return;
   }
-  status.textContent = rows.length + (rows.length === 1 ? " canvas" : " canvases");
-  rows.forEach((r) => {
-    const rowl = mk("div", { class: "rowl", title: "open " + r.name + " in a new tab" });
-    rowl.appendChild(mk("span", { class: "nm", text: r.name }));
-    rowl.appendChild(mk("span", { class: "dt", text: bxWhen(r.updatedAt) }));
-    rowl.addEventListener("click", () => bxTabOpenSavedRow(r, status));
-    list.appendChild(rowl);
+  if (!ql) {
+    item("New canvas", "create", () => { bxSwitchClose(); bxTabNew(); });
+    item("AI agent", "create", () => { bxSwitchClose(); bxTabNewAI(); });
+    item("Saved canvas \u2026", "view",
+         () => { BXTAB.view = "saved"; bxSwitchBuild(); });
+  }
+  let seen = 0;
+  (BX.projects || []).forEach((p) => {
+    if (ql && String(p.name || "").toLowerCase().indexOf(ql) < 0) return;
+    seen += 1;
+    item(p.name, p.id === BX.active ? "current" : "",
+         () => { bxSwitchClose(); bxTabSelect(p.id); });
   });
-  return true;
-}
-function bxTabOpenSavedRow(row, status) {
-  if (!row || typeof status === "undefined") return;
-  if (status) status.textContent = "opening " + row.name + " \u2026";
-  if (!row.design) { status.textContent = "that canvas could not be opened"; return; }
-  if (!bxTabOpenSaved(row.name, row.design, row.id, row.session))
-    status.textContent = "that canvas cannot be opened here";
-  else
-    bxtDropsClose();
+  if (ql && !seen) item("nothing matches", "", null, true);
 }
 
-// ---- the AI agent tab: a conversation, not a canvas -------------------------
-// The + opens it beside the canvases. Its surface is the reverse-engineering
-// agent, spoken to: every message is one `chat` task, the agent's stream folds
-// into the thread as it writes, and the CLI session the first turn creates is
-// carried into the next — so the conversation remembers. There is no canvas
-// under it: the palette, Import and VRAM are off while it is the active tab.
+// ---- the AI agent canvas: a conversation, not a canvas ----------------------
+// The ⌘K switcher opens it beside the canvases. Its surface is the
+// reverse-engineering agent, spoken to: every message is one `chat` task, the
+// agent's stream folds into the thread as it writes, and the CLI session the
+// first turn creates is carried into the next — so the conversation remembers.
+// There is no canvas under it: the palette, Import and VRAM are off while it
+// is the active canvas.
 function bxTalkOn() {
   const p = bxProject();
   return !!(p && p.kind === "ai");
@@ -10517,9 +10647,12 @@ function bxHeadRefresh() {                     // the head: the canvas's name, i
   const chat = $("bxtChat");
   if (chat) chat.hidden = !(p && p.kind !== "ai" && p.session != null);
 }
-function bxThemeApply() {                      // the toggle shows the theme in use
+function bxThemeApply() {                      // the button names the theme it would flip to
   const el = $("bxtTheme");
-  if (el) el.textContent = bxThemeNow() === "light" ? "\u2600" : "\u263e";
+  if (!el || !el.children) return;
+  const light = bxThemeNow() === "light";
+  if (el.children[0]) el.children[0].textContent = light ? "\u263e" : "\u2600";
+  if (el.children[1]) el.children[1].textContent = light ? "Dark theme" : "Light theme";
 }
 function bxThemeToggle() {
   const next = bxThemeNow() === "light" ? "dark" : "light";
@@ -10538,12 +10671,12 @@ function bxThemeToggle() {
 }
 function bxtRefresh() {
   const up = !!BX.up;
-  const talk = bxTalkOn();                     // the AI tab has no canvas beneath
+  const talk = bxTalkOn();                     // no canvas lies beneath the AI one
   const off = up || talk;
   const imp = $("bxtImport");                  // a whole model loads at the top level
   if (imp) {
     if (imp.classList) imp.classList.toggle("off", off);
-    imp.title = talk ? "the AI agent tab has no canvas \u2014 the + opens one"
+    imp.title = talk ? "the AI agent canvas has no canvas \u2014 the \u2318K switcher opens one"
               : up ? "come back out to the top level first"
               : "bring a GGUF model in";
   }
@@ -10559,7 +10692,7 @@ function bxtRefresh() {
   }
   bxtRunRefresh();                             // Run follows the backend's state
   bxHeadRefresh();                             // the head: the canvas's name and device
-  if (bxTalkOn()) bxTalkSync();                // the AI tab repaints on every sync
+  if (bxTalkOn()) bxTalkSync();                // the AI canvas repaints on every sync
 }
 function bxtInit() {
   const item = (text, title, fn) => {
@@ -10586,7 +10719,13 @@ function bxtInit() {
   };
   bxtBackendLoad();                            // the remembered backend choice
   wire("bxtPalette", bxtPaletteToggle);
-  wire("bxtabadd", bxtabToggle);
+  wire("bxsCollapse", bxsToggle);              // the sidebar folds, and the choice is remembered
+  wire("bxrSearch", () => bxSwitchToggle());   // the search door: the switcher
+  if (typeof navigator !== "undefined" &&
+      !/Mac|iPhone|iPad/.test(String(navigator.platform || ""))) {
+    const kbd = $("bxrSearch") && $("bxrSearch").children ? $("bxrSearch").children[2] : null;
+    if (kbd && kbd.textContent === "\u2318K") kbd.textContent = "Ctrl K";   // off-mac, the key is Ctrl
+  }
   const th = $("bxtTheme");                    // the Salon theme, remembered
   if (th && th.addEventListener) th.addEventListener("click", bxThemeToggle);
   bxThemeApply();
@@ -10613,10 +10752,41 @@ function bxtInit() {
   document.addEventListener("mousedown", (ev) => {   // a click outside closes them all
     const t = ev.target;
     if (t && t.closest && (t.closest(".bxtdrop") || t.closest(".bxtbtn") ||
-                           t.closest(".bxuser") || t.closest(".bxtabadd"))) return;
+                           t.closest(".bxuser") || t.closest("#bxrNew") ||
+                           t.closest("#bxrSearch"))) return;
     bxtDropsClose();
   });
   bxtDropsClose();                             // all menus start closed
+  const sback = $("bxswitchBack");             // the switcher's own wiring
+  if (sback && sback.addEventListener)
+    sback.addEventListener("mousedown", (ev) => {
+      if (ev.target === sback) bxSwitchClose();
+    });
+  const sq = $("bxswitchQuery");
+  if (sq && sq.addEventListener) {
+    sq.addEventListener("input", () => {
+      if (BXTAB.view === "main") bxSwitchBuild();
+    });
+    sq.addEventListener("keydown", (ev) => {   // the switcher's keyboard: the chat's
+      const k = String(ev.key || "");
+      if (k === "Escape") {
+        if (ev.preventDefault) ev.preventDefault();
+        bxSwitchClose();
+        return;
+      }
+      const lis = $("bxswitchList") ? $("bxswitchList").children : [];
+      if (k === "ArrowDown" || k === "ArrowUp") {
+        if (ev.preventDefault) ev.preventDefault();
+        if (!lis.length) return;
+        BXTAB.cursor = (BXTAB.cursor + (k === "ArrowDown" ? 1 : -1) + lis.length) % lis.length;
+        for (let i = 0; i < lis.length; i++)
+          if (lis[i].classList) lis[i].classList.toggle("sel", i === BXTAB.cursor);
+        return;
+      }
+      if (k === "Enter" && lis[BXTAB.cursor] && lis[BXTAB.cursor].click)
+        lis[BXTAB.cursor].click();
+    });
+  }
   bxtRefresh();
   bxAccountSync();                             // the tool strip already says guest
   bxSplash(bxSessionHint() || bxAtDoor(),      // a live session — or the door,
@@ -11498,7 +11668,7 @@ function bxAgentTick(now) {                    // one log poll for every live bo
     const t = bxTask(n.task_id);
     if (!t) return bxTraining(n);               // unknown task: the box knows best
     return t.status === "running" || t.status === "paused";
-  }) || !!bxTalkCurrent();                     // the AI tab's running turn
+  }) || !!bxTalkCurrent();                     // the AI canvas's running turn
   const pullLogs = () => {
     for (const n of BX.nodes || [])
       if (n.kind === "agent" && n.task_id) bxTaskLogFetch(n.task_id, bxAgentSync);
@@ -12921,6 +13091,12 @@ function bxSeedBlank() {
   document.addEventListener("paste", bxOnPaste);
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape") { bxMenuClose(); bxSelect(null); return; }
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey &&
+        String(ev.key || "").toLowerCase() === "k") {
+      ev.preventDefault();                     // the browser's search stays away
+      bxSwitchToggle();
+      return;
+    }
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey &&
         String(ev.key || "").toLowerCase() === "s") {
       ev.preventDefault();                     // the browser's own save stays away
