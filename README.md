@@ -30,6 +30,25 @@ off last time, which is the `place` record in its store: on the backend, so it
 follows the account to any device. The halves have their own addresses,
 `/chat` and `/studio` (the canvas never bounces) — the door is the navigation.
 
+A **session** is a conversation and the canvas it is bound to. The binding is
+made from the chat side: each open session carries a **Studio** door in its
+head, and the first click crosses to `/studio?canvas=<id>` — on the way it
+mints the canvas id, seals a fresh blank canvas under it (the row's key is
+the AAD its record is sealed with, `canvas|<id>`) and appends the canvas's
+tab to the shared open-tabs record (`session|current`); later clicks just
+cross. On the canvas side the door's parameter opens that canvas as a tab,
+the saves keep the binding, and a **Chat →** door carries the conversation
+back; a pre-v2 store that still carries the open-tabs record under the bare
+key `current` is folded into `session|current` at first boot, the legacy
+tabs first, so a link made in the chat meanwhile never shadows them. The
+binding also rides in the canvas record's `session` field — the
+conversation's id — so at boot the chat half re-links a session whose canvas
+is missing, or bound to someone else, to a fresh blank, and the agent reads
+the canvas through the **read_canvas** tool: read-only, no consent, the
+sealed record re-opened on every call. A guest's door crosses to a plain
+`/studio` — no key, no binding — and a conversation that predates the
+binding adopts a fresh canvas on its first click.
+
 They are one app on one origin and **one server**: `./run.sh` is the whole
 thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
 (FastAPI — accounts, the encrypted store, the OpenAI pass-through) **inside
@@ -178,7 +197,8 @@ one stays on the server.
 
 ## Tests
 
-    ./tests/run.sh           # offline: JS syntax, the DOM harness, the builder, the engine, HTML
+    ./tests/run.sh           # offline: JS syntax, the DOM harness, the builder, the engine,
+                             #   the account crypto, the session seam, HTML
     ./tests/run.sh --live    # + the running app, a real agent run, and the gateway's
                              #   own pytest suite (needs the MariaDB container)
     # the diffusers gate needs the venv's diffusers (the reference): it builds a
@@ -198,11 +218,13 @@ one stays on the server.
 | `tests/gguf_canvas_test.py` | the pure builder test, on synthetic tensors |
 | `tests/nn_torch_test.py` | the engine's offline tests (forward, ops, training, GGUF weights) |
 | `tests/diffusers_unet_test.py` | the diffusers gate: tiny random UNet2DConditionModels — plain, SDXL's `text_time`, SDXL's whole block shape — through diffusers' eager path and through `nn_engine.diffusers_unet_canvas`: stage for stage, every tensor bound |
-| `tests/studio_crypto_test.js` | the Studio half's account crypto, pinned to the Chat half's: the key's shape, the credential, the HKDF record key against Node's own HKDF, and the record binding (AAD) |
+| `tests/studio_crypto_test.js` | the Studio half's account crypto, pinned to the Chat half's: the key's shape, the credential, the HKDF record key against Node's own HKDF, the record binding (AAD), and the AAD normalizer over the page's legacy rows |
+| `tests/canvas_link_test.js` | the session seam from the Chat half's side: the canvas half's own sealer writes the rows (keyed by the AADs, `canvas|<id>`, `session|current`), the Chat half's canvasLink — bundled for Node, the store stubbed — reads them back; plus the digest and the `read_canvas` tool the agent rides on |
 | `tests/gateway_bridge_test.py` | the in-process ASGI bridge: the scope, streaming in order, a slow client losing nothing, mid-stream failures, the failed startup, and the client-hang-up cancellation |
 | `nn_gateway.py` | the bridge that runs the Chat half's FastAPI gateway inside this process (one event loop, one task per request, cancellation on hang-up) |
 | `tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
 | `tools/chat_job.py` | the AI agent tab's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
+| `studio/frontend/src/lib/canvasLink.ts` | the session seam, chat side: reads the canvas rows the canvas half seals (a row's key is the AAD its record is sealed under), writes the binding — mints the canvas a session binds to, appends its tab to the shared `session|current` record — and hands the agent the read-only `read_canvas` tool |
 | `studio/` | the Chat half, vendored: AI Studio's React SPA (`frontend/dist` served at `/chat`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
 | `tools/tls_local.sh` | the tiny local CA + server certificate (`.certs/`, git-ignored) for reaching the app over https from your own devices |
 | `tests/agent_test.py` | the live end-to-end: a real agent connects and a design runs (`--live`) |

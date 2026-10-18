@@ -18,9 +18,11 @@ dialog names the missing model (and points to **Settings**, the provider box),
 and a send that goes ahead anyway bounces back in the wall with the same note,
 in red. An account skips the welcome —
 its `place` record (the one unsealed record in its store, written by whichever
-half is opened) routes the arrival to the half it left off in. The two halves
-carry no cross-navigation: `/chat` and `/studio` are their addresses, and the
-door is what moves between them.
+half is opened) routes the arrival to the half it left off in. The halves
+carry no cross-navigation of their own — no switch in a top bar: `/chat` and
+`/studio` are their addresses, and the door is what moves between them. The
+one place a conversation reaches the canvas is its own **Studio** door (see
+**What runs**).
 
 ## What runs
 
@@ -40,6 +42,21 @@ The gateway can still run standalone for the upstream deployment
 (`uv run uvicorn app.main:app` in `backend/`, its own `.env`) — it is the same
 code, and `/v1` is then open unless `GATEWAY_TOKEN` or `REQUIRE_SESSION` says
 otherwise.
+
+The session seam — the one place the two halves touch. One session is a
+conversation and the canvas it is bound to, and the binding lives in the
+encrypted store: this half is its only writer, the canvas half owns the
+design. A session's **Studio** door, on first click, mints a canvas id (`c_`
++ eight random bytes), seals a fresh blank canvas under the row key
+`canvas|<id>` — a row's key is the AAD the record is sealed under — appends
+the canvas's tab to the shared open-tabs record `session|current`, and then
+crosses to `/studio?canvas=<id>`, the sync kept alive and capped so a slow
+network never holds the door shut. The canvas half seals its rows, and this
+half reads them back: the record's `session` field is what the boot heal
+re-links a session with when its canvas is missing, and the agent's
+**read_canvas** tool answers from that read — read-only, no consent, the
+sealed record re-opened on every call. A guest's door crosses to a plain
+`/studio`: no key, no binding.
 
 ## Build the SPA
 
@@ -69,9 +86,13 @@ development one:
 
 The upstream suites live in `backend/tests` (they need MariaDB; the upstream
 Playwright `shot-*.mjs` gates stay under `frontend/tmp`). Studio Kitsui's own
-suite covers the merge and the account work: the in-process bridge
-(`tests/gateway_bridge_test.py`), the Studio half's crypto pinned to this
-half's derivation (`tests/studio_crypto_test.js`), and the live gates in
+suite covers the merge, the account work, and the seam between the halves:
+the in-process bridge (`tests/gateway_bridge_test.py`), the Studio half's
+account crypto pinned to this half's derivation — key shape, credential, the
+HKDF record key against Node's own, the AAD binding, and the normalizer over
+the page's legacy rows (`tests/studio_crypto_test.js`) — the seam read from
+this half's side, the canvas half's sealer writing the rows this half's
+`canvasLink` reads back (`tests/canvas_link_test.js`), and the live gates in
 `tests/run.sh --live`.
 
 ## The brand

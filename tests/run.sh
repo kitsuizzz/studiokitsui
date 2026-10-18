@@ -46,6 +46,12 @@ $PY tests/brand_test.py >/tmp/nnstudio_brand.log 2>&1 && ok || { bad; tail -15 /
 step "studio account crypto (Chat's KDF)"
 node tests/studio_crypto_test.js >/tmp/nnstudio_studio_crypto.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_studio_crypto.log; }
 
+step "the session seam (bundled for Node)"
+studio/frontend/node_modules/.bin/esbuild studio/frontend/src/lib/canvasLink.ts --bundle --platform=node --format=cjs --define:import.meta.env.BASE_URL='"/chat/"' --outfile=/tmp/nnstudio_canvas_link_bundle.cjs >/tmp/nnstudio_canvas_link_build.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_canvas_link_build.log; }
+
+step "the session seam (the Chat half's view of the canvas)"
+node tests/canvas_link_test.js >/tmp/nnstudio_canvas_link.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_canvas_link.log; }
+
 step "gateway bridge (in-process)"
 $PY tests/gateway_bridge_test.py >/tmp/nnstudio_gateway_bridge.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_gateway_bridge.log; }
 

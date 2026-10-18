@@ -7,8 +7,9 @@
  * derives, so one access key opens both halves' records. This test lifts the
  * page's crypto helpers out of the script, derives a key from a fixed access
  * key, and checks the sealed bytes against Node's own HKDF (RFC 5869) — an
- * independent implementation — plus the credential, the key's shape, and the
- * record binding (AAD).
+ * independent implementation — plus the credential, the key's shape, the
+ * record binding (AAD), and the AAD normalizer that lets the page's legacy
+ * rows open under the key the Chat half binds them by.
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -26,19 +27,27 @@ function grab(start, end) {
 
 const consts = grab("const BX_E2E = {", "const BX_CANVAS_MAX");
 const funcs = grab("function bxCryptoReady()", "// the shared key cache");
+// the AAD normalizer sits past the key cache, so it gets its own lift
+const aad = grab("function bxCanvasAad(id) {", "async function bxCanvases()");
 const ui = new Function(
-  consts + funcs + "; return { bxNewKey, bxHandle, bxCredential, bxDataKey, bxSealRecord, bxOpenRecord };",
+  consts + funcs + aad +
+  "; return { bxNewKey, bxHandle, bxCredential, bxDataKey, bxSealRecord, bxOpenRecord, bxCanvasAad };",
 )();
 
 const failed = [];
+const checks = [];
 function check(name, fn) {
-  return Promise.resolve()
+  const p = Promise.resolve()
     .then(fn)
     .then(() => console.log("  ok   " + name))
     .catch((e) => {
       failed.push(name);
       console.log("  FAIL " + name + " — " + (e && e.message));
     });
+  checks.push(p); // the summary waits on all of these — a trailing bare
+                   // Promise.resolve().then(...) reports before the async
+                   // checks settle, and would let their failures escape
+  return p;
 }
 function need(cond, msg) {
   if (!cond) throw new Error(msg);
@@ -107,7 +116,44 @@ check("a record is bound to its id (AAD)", async () => {
   need(!opened, "a record opened under the wrong id");
 });
 
-Promise.resolve().then(() => {
+check("the normalizer maps a legacy bare id onto the AAD the Chat half binds", () => {
+  need(ui.bxCanvasAad("c_00112233") === "canvas|c_00112233", "a bare id must take the canvas| prefix");
+  need(ui.bxCanvasAad("canvas|c_00112233") === "canvas|c_00112233", "a prefixed id must pass through, untouched");
+});
+
+check("a legacy row sealed through the normalizer opens under the Chat half's AAD", async () => {
+  const key = await ui.bxDataKey(KEY);
+  // pre-v2, the canvas rows were keyed by the bare id; the normalizer is
+  // what makes the bytes the page seals for such a row belong to the row
+  // key the Chat half looks them up by
+  const blob = await ui.bxSealRecord(key, ui.bxCanvasAad("c_00112233"), { name: "legacy", session: "7" });
+  const back = await ui.bxOpenRecord(key, "canvas|c_00112233", blob);
+  need(back && back.name === "legacy" && back.session === "7",
+    "a legacy row did not open under the key the Chat half binds it by");
+});
+
+check("a double-prefixed AAD opens nothing", async () => {
+  const key = await ui.bxDataKey(KEY);
+  const blob = await ui.bxSealRecord(key, "canvas|c_00112233", { v: 1 });
+  let opened = false;
+  try {
+    await ui.bxOpenRecord(key, "canvas|canvas|c_00112233", blob);
+    opened = true;
+  } catch (e) {
+    // expected: the double prefix is not this record's AAD
+  }
+  need(!opened, "a record opened under a double-prefixed AAD");
+});
+
+check("the session row is bound to its own AAD (session|current)", async () => {
+  const key = await ui.bxDataKey(KEY);
+  const blob = await ui.bxSealRecord(key, "session|current", { tabs: [{ id: "c_00112233", name: "legacy" }], active: "c_00112233" });
+  const back = await ui.bxOpenRecord(key, "session|current", blob);
+  need(back && back.tabs && back.tabs.length === 1 && back.tabs[0].id === "c_00112233" && back.active === "c_00112233",
+    "the session row did not round-trip under its AAD");
+});
+
+Promise.all(checks).then(() => {
   if (failed.length) {
     console.log("studio_crypto_test: " + failed.length + " failure(s): " + failed.join(", "));
     process.exit(1);
