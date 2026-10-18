@@ -5059,6 +5059,8 @@ checkAsync("the session lands in the account's store, sealed", async () => {
   await __t.bxSessionPush();
   ok(sent && sent.session && sent.session.upserts.length === 1 &&
      sent.conversations === undefined, "only the session delta rides");
+  eql(sent.session.upserts[0].id, "session|current",
+      "the row's key is its AAD, the way the Chat half reads it");
   const blob = sent.session.upserts[0].blob;
   ok(String(blob).indexOf("alpha") < 0, "the record is ciphertext, not the names");
   eql(await __t.bxOpenRecord(cryptoKey, "session|current", blob),
@@ -5125,10 +5127,14 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
     place: [],
   };
   const keepFetch = global.fetch;              // serial: every other check is done
-  global.fetch = async (url) => {
+  const syncs = [];                            // the sync writes, in order — the
+                                               // migration's retirement is one of them
+  global.fetch = async (url, opts) => {
     const u = String(url);
-    if (u.indexOf("/chat/auth/store") === 0)
+    if (u.indexOf("/chat/auth/store") === 0) {
+      if (opts && opts.body) syncs.push(JSON.parse(opts.body));
       return { ok: true, status: 200, json: async () => store };
+    }
     return { ok: false, status: 404, json: async () => ({}) };
   };
   const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key, locked: __t.BXACCT.locked };
@@ -5151,6 +5157,13 @@ checkAsync("a session restore lands the saved canvases, with their content", asy
        ((__t.BX.projects || []).length < 2 || getEl("bxsplash").hidden === false); i++)
     await new Promise(r => setImmediate(r));   // veil and all
   ok((__t.BX.projects || []).length >= 2, "the restore opens the session's tabs");
+  const mig = syncs.filter(s => s.session && s.session.deletes && s.session.deletes.length).pop();
+  ok(mig, "the legacy row was folded in and retired, once, at boot");
+  ok(mig.session.upserts.length === 1 && mig.session.upserts[0].id === "session|current",
+     "the merged record rides the AAD key, the one the Chat half reads");
+  eql(await __t.bxOpenRecord(cryptoKey, "session|current", mig.session.upserts[0].blob),
+      { tabs: [{ id: "c-beta", name: "beta" }, { id: "c-alpha", name: "alpha" }], active: "c-alpha" },
+      "and the legacy tabs ride it intact, in their order");
   eql(getEl("bxsplash").hidden, true, "\u2026and the veil drops the moment they land");
   const names = (__t.BX.projects || []).map(p => p.name);
   eql(names, ["beta", "alpha"], "the boot blank steps aside, the saved order holds: "

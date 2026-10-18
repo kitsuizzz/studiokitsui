@@ -9013,16 +9013,42 @@ async function bxSessionPush() {               // after every open, close, switc
     await fetch("/chat/auth/store/sync", {     // backend, so any device that
       method: "POST",                          // signs in lands where the
       headers: { "Content-Type": "application/json" },   // account left off
-      body: JSON.stringify({ session: { upserts: [{ id: "current", blob: blob }], deletes: [] } }),
+      body: JSON.stringify({ session: { upserts: [{ id: "session|current", blob: blob }], deletes: [] } }),
     });
   } catch (e) {}
   return true;
 }
-async function bxSessionStored() {             // the sealed session, or null
+async function bxSessionStored() {             // the sealed session, or null. The
+  // row's key is its AAD, "session|current" — pre-v2 stores carried this same
+  // record under the bare key "current". The new key wins; while a legacy row
+  // still exists it is folded in and retired here, once — a link made in the
+  // chat half before this boot must not shadow the user's own tabs.
   if (!BXACCT.user || !BXACCT.key) return null;
   try {
-    const store = await bxStoreRead();
-    const row = (((store || {}).session) || []).find(r => r.id === "current");
+    const rows = (((await bxStoreRead()) || {}).session) || [];
+    const row = rows.find(r => r.id === "session|current");
+    const legacy = rows.find(r => r.id === "current");
+    if (legacy) {
+      const old = await bxOpenRecord(BXACCT.key, "session|current", legacy.blob);
+      if (!old || typeof old !== "object") {   // unreadable: behave as pre-v2
+        if (!row) return null;                  // nothing to fold in; the new
+        const sn = await bxOpenRecord(BXACCT.key, "session|current", row.blob);      // row stands alone
+        return sn && typeof sn === "object" ? sn : null;
+      }
+      const sn = (row && (await bxOpenRecord(BXACCT.key, "session|current", row.blob))) || null;
+      const tabs = [];
+      const seen = {};
+      for (const t of [].concat(old.tabs || [], (sn && sn.tabs) || []))
+        if (t && t.id && !seen[t.id]) { seen[t.id] = true; tabs.push(t); }
+      const merged = { tabs: tabs, active: (sn && sn.active) || old.active || null };
+      const blob = await bxSealRecord(BXACCT.key, "session|current", merged);
+      await fetch("/chat/auth/store/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session: { upserts: [{ id: "session|current", blob: blob }], deletes: ["current"] } }),
+      });
+      return merged;                            // the legacy row is retired
+    }
     if (!row) return null;
     const sn = await bxOpenRecord(BXACCT.key, "session|current", row.blob);
     return sn && typeof sn === "object" ? sn : null;
