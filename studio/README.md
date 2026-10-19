@@ -35,9 +35,9 @@ the old arrival rules (`?conversation=`; `door=studio` for one-shot crossings;
 the welcome as a cold-start home). The lock is the one thing the door does not
 outrank — while the store is locked the unlock screen shows, and the switch
 re-runs once the key is back. The halves have one switch in their head row —
-next to Chat Kitsui in the chat, at the canvas head in Studio — and it steps
-into the top bar when the chat has no head (the welcome, the lock screen);
-the address follows (`/chat`, `/studio`).
+next to Chat Kitsui in the chat, at the canvas head in Studio — and it
+appears with the first session (the welcome itself has no switch); the
+address follows (`/chat`, `/studio`).
 The one place a conversation reaches the canvas is that switch (see **What
 runs**) — and the canvas side's **New session**
 does the same in reverse: it asks the chat for the session, which seals the
