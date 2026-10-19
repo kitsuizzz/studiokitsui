@@ -3349,25 +3349,6 @@ export default function App() {
   // kept alive and capped: the click navigates right after, and a slow
   // network must not hold the door shut.
 
-  const goStudio = async () => {
-    const conv = conversations.find((c) => c.id === activeId);
-    if (!conv) return;
-    await studioFor(conv);
-  };
-
-
-
-  // The door itself, in the running head of an open session. A build thread
-  // is a sub-dialog of a session, not a session — no door there (its canvas,
-  // if it ever had one, belongs to the parent).
-  const studioButton = inThread ? (
-    undefined
-  ) : (
-    <button className="head-btn head-studio" type="button" onClick={() => void goStudio()}>
-      Studio
-    </button>
-  );
-
   // The one shared shell (top bar + left menu) lives on the host page when
   // the chat is embedded; the app then renders its main area alone.
   const main = (
@@ -3383,7 +3364,6 @@ export default function App() {
               onMenu={() => setSidebarOpen((o) => !o)}
               onBack={inThread ? () => openConversation(active.parentId ?? active.id) : undefined}
               onOpenCode={inThread ? undefined : () => setCodeApp("conversation")}
-              studioButton={studioButton}
               modelPicker={
                 !inThread && activeAgent ? (
                   <AgentSwitcher

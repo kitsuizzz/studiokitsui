@@ -19,8 +19,8 @@ agents, providers, web tools and the studio builder. One page serves both: the
 top bar and the left menu are the same DOM in either half — one session list,
 the same account, theme, and fold — and a crossing swaps only the main area.
 The chat half's welcome is full-bleed under that top bar: the left menu waits
-for the first session and comes back with it. There is no Chat | Studio switch
-in the top bar: the **Chat →** and **Studio** doors are the way across.
+for the first session and comes back with it. The **Chat | Studio** switch
+sits in the top bar, the same place in both halves.
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
 lands on the landing page — the Chat half's welcome, where Create an account
@@ -34,8 +34,8 @@ follows the account to any device. The halves have their own addresses,
 `/chat` and `/studio` (the canvas never bounces) — the door is the navigation.
 
 A **session** is a conversation and the canvas it is bound to — one thing,
-made whole from either side. Each chat session carries a **Studio** door in
-its head, and the first crossing seals its canvas (minting the id, sealing a
+made whole from either side. The top bar's **Studio** switch crosses from the
+chat to its canvas — the first crossing seals it (minting the id, sealing a
 blank under it — the row's key is the AAD its record is sealed with,
 `canvas|<id>` — and appending its tab to the shared open-tabs record,
 `session|current`); later crossings just open it. **New session** on the
@@ -44,12 +44,11 @@ made before its chat gains the conversation on its first crossing — likewise
 a chat-only session gains its canvas. The sidebar is one item per session:
 the chat and its canvas, never two. The crossings are live: the shell stays,
 the main area swaps, and the address follows (`/studio?canvas=<id>` or
-`/chat`); the left menu lists the same sessions in both halves. On the canvas side the named canvas opens
-as a tab, the saves keep the binding, and the head's **Chat →** door returns
-to the conversation — one with a conversation of its own opens it, every
-other (the AI canvas included) opens a session where the account left off
-(a signed-in account's last conversation, a guest's fresh one), so a switch
-out of Studio never lands on the chat half's landing page. A pre-v2 store
+`/chat`); the left menu lists the same sessions in both halves. The **Chat**
+switch returns to the conversation; from a canvas that has no chat yet it
+creates that canvas's chat first (a session is a pair), so a switch out of
+Studio never lands on the chat half's landing page. The AI agent's tab is a
+conversation of its own — Chat crosses from it to a fresh session. A pre-v2 store
 that still carries the open-tabs record under the bare
 key `current` is folded into `session|current` at first boot, the legacy
 tabs first, so a link made in the chat meanwhile never shadows them. The
@@ -224,7 +223,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head above it carries the Chat → door — a bound canvas opens its conversation, every other one a session, never the landing — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
+| `ui/index.html` | the one shell page — the top bar (brand, the Chat | Studio switch, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the top bar's Chat | Studio switch is the pair's crossing — the canvas opens its chat, or gains one — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |

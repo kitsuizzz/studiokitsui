@@ -11,8 +11,6 @@ interface RunningHeadProps {
   /** The active model's context window, from the provider's /models endpoint. */
   maxTokens: number | null;
   onMenu: () => void;
-  /** The "Studio" door for this session (the canvas half); rendered first. */
-  studioButton?: ReactNode;
   /** The model switcher (the chip that opens the Server / BYOK menu). */
   modelPicker?: ReactNode;
   /** Open the Code pane for this app. */
@@ -33,7 +31,6 @@ export default function RunningHead({
   onMenu,
   onBack,
   onOpenCode,
-  studioButton,
   modelPicker,
   speeds,
   live,
@@ -60,7 +57,6 @@ export default function RunningHead({
         </div>
       </div>
       <div className="head-right">
-        {studioButton}
         {modelPicker}
         {onOpenCode && (
           <button

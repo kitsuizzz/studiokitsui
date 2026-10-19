@@ -23,20 +23,21 @@ and a send that goes ahead anyway bounces back in the wall with the same note,
 in red. An account skips the welcome —
 its `place` record (the one unsealed record in its store, written by whichever
 half is opened) routes the arrival to the half it left off in. The canvas
-half's **Chat →** door is the welcome's one exception: it is a live crossing
-(the shell stays; only the main area swaps) and it names the conversation when
-the canvas has one, and that outranks the holds — a guest's own conversation,
-or a signed-in account's (even one still on its no-model setup screen), opens
-in the thread it names; a crossing with no conversation to open (or with one
-this store no longer has) opens a session instead — the account's last
-conversation, or a fresh one, never the welcome. A direct `/chat` load keeps
+top bar's **Chat | Studio** switch is the welcome's one exception: it is a
+live crossing (the shell stays; only the main area swaps) and, from a canvas,
+it opens that session's chat — a canvas with no chat yet gains one — and that
+outranks the holds: a guest's own conversation, or a signed-in account's
+(even one still on its no-model setup screen), opens in the thread it names;
+a crossing with no conversation to open (or with one this store no longer
+has) opens a session instead — the account's last conversation, or a fresh
+one, never the welcome. A direct `/chat` load keeps
 the old arrival rules (`?conversation=`; `door=studio` for one-shot crossings;
 the welcome as a cold-start home). The lock is the one thing the door does not
-outrank — while the store is locked the unlock screen shows, and the door
-re-runs once the key is back. The halves carry no switch in a top bar: the
-doors are what move between them, and the address follows (`/chat`,
-`/studio`). The one place a conversation reaches the canvas is its own
-**Studio** door (see **What runs**) — and the canvas side's **New session**
+outrank — while the store is locked the unlock screen shows, and the switch
+re-runs once the key is back. The halves have one switch in their one top
+bar — the same place in both — and the address follows (`/chat`, `/studio`).
+The one place a conversation reaches the canvas is that switch (see **What
+runs**) — and the canvas side's **New session**
 does the same in reverse: it asks the chat for the session, which seals the
 canvas under the pair's id (the canvas half creates the conversation for a
 canvas that has none, and binds the existing design rather than replacing
