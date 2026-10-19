@@ -82,6 +82,16 @@ export async function deriveEncKey(key: string): Promise<CryptoKey> {
   );
 }
 
+/** AES-GCM parameters for a record. `additionalData` exists only when there
+    is an AAD — Chrome rejects a present `additionalData: undefined` ("Not a
+    BufferSource"), so an unbound record must leave the member out entirely
+    (the ciphertext is the same either way; Safari has always read it so). */
+function gcmParams(iv: BufferSource, aad?: BufferSource): AesGcmParams {
+  const params: AesGcmParams = { name: "AES-GCM", iv };
+  if (aad) params.additionalData = aad;
+  return params;
+}
+
 /** JSON → base64(iv ‖ AES-GCM ciphertext). A fresh random IV per record.
     With `aad` (the record id), the ciphertext is bound to that id — the
     canvas half seals its records the same way, so the two halves interoperate. */
@@ -90,7 +100,7 @@ export async function encryptJson(key: CryptoKey, value: unknown, aad?: string):
   crypto.getRandomValues(iv);
   const aadBytes = aad != null ? new TextEncoder().encode(aad) : undefined;
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: aadBytes },
+    gcmParams(iv, aadBytes),
     key,
     new TextEncoder().encode(JSON.stringify(value)),
   );
@@ -108,7 +118,7 @@ export async function decryptJson<T>(key: CryptoKey, blob: string, aad?: string)
   const iv = raw.subarray(0, IV_BYTES);
   const ciphertext = raw.subarray(IV_BYTES);
   const aadBytes = aad != null ? new TextEncoder().encode(aad) : undefined;
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: aadBytes }, key, ciphertext);
+  const plaintext = await crypto.subtle.decrypt(gcmParams(iv, aadBytes), key, ciphertext);
   return JSON.parse(new TextDecoder().decode(plaintext)) as T;
 }
 

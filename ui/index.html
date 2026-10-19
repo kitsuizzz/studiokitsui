@@ -8397,9 +8397,12 @@ async function bxDataKey(key) {                // the record key: Chat's deriveE
 }
 async function bxSealRecord(key, aad, value) { // base64(iv ‖ ct), bound to its record
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv, additionalData: aad ? bxUtf8(aad) : undefined },
-    key, bxUtf8(JSON.stringify(value)));
+  // An absent AAD is *absent*, not undefined: Chrome rejects a present
+  // `additionalData: undefined` ("Not a BufferSource"), so the member only
+  // exists when there is one (an unbound record seals exactly as before).
+  const params = { name: "AES-GCM", iv: iv };
+  if (aad) params.additionalData = bxUtf8(aad);
+  const ct = await crypto.subtle.encrypt(params, key, bxUtf8(JSON.stringify(value)));
   const out = new Uint8Array(iv.length + ct.byteLength);
   out.set(iv, 0);
   out.set(new Uint8Array(ct), iv.length);
@@ -8408,10 +8411,9 @@ async function bxSealRecord(key, aad, value) { // base64(iv ‖ ct), bound to it
 async function bxOpenRecord(key, aad, blob) {
   const raw = bxUnb64(blob);
   if (raw.length <= 12) throw new Error("malformed record");
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: raw.subarray(0, 12),
-      additionalData: aad ? bxUtf8(aad) : undefined },
-    key, raw.subarray(12));
+  const params = { name: "AES-GCM", iv: raw.subarray(0, 12) };
+  if (aad) params.additionalData = bxUtf8(aad);
+  const pt = await crypto.subtle.decrypt(params, key, raw.subarray(12));
   return JSON.parse(new TextDecoder().decode(pt));
 }
 // the shared key cache: the "aistudio" IndexedDB the Chat half opens (same
