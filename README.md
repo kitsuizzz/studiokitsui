@@ -15,9 +15,11 @@ the GPU, which dials the app and stays connected (see **Backend** and
 
 **Studio** is the canvas, at `/studio` — everything this README describes.
 **Chat** is AI Studio (chat.kitsui) at `/chat`: the conversation app with
-agents, providers, web tools and the studio builder. The two halves carry no
-cross-navigation of their own (the top bar has no switch, and the landing page
-opens only into Chat).
+agents, providers, web tools and the studio builder. One page serves both: the
+top bar and the left menu are the same DOM in either half — one session list,
+the same account, theme, and fold — and a crossing swaps only the main area.
+There is no Chat | Studio switch in the top bar: the **Chat →** and **Studio**
+doors are the way across.
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
 lands on the landing page — the Chat half's welcome, where Create an account
@@ -36,13 +38,15 @@ head, and the first click crosses to `/studio?canvas=<id>` — on the way it
 mints the canvas id, seals a fresh blank canvas under it (the row's key is
 the AAD its record is sealed with, `canvas|<id>`) and appends the canvas's
 tab to the shared open-tabs record (`session|current`); later clicks just
-cross. On the canvas side the door's parameter opens that canvas as a tab,
-the saves keep the binding, and the head's **Chat →** door carries the
-conversation back — the door stands on every canvas: one with a
-conversation of its own opens it, every other (the AI canvas included)
-opens a session where the account left off (a signed-in account's last
-conversation, a guest's fresh one), so a switch out of Studio never lands
-on the chat half's landing page. A pre-v2 store that still carries the open-tabs record under the bare
+cross. The crossings are live now: the shell stays, the main area swaps, and
+the address follows (`/studio?canvas=<id>` or `/chat`); the left menu lists
+the same sessions in both halves. On the canvas side the named canvas opens
+as a tab, the saves keep the binding, and the head's **Chat →** door returns
+to the conversation — one with a conversation of its own opens it, every
+other (the AI canvas included) opens a session where the account left off
+(a signed-in account's last conversation, a guest's fresh one), so a switch
+out of Studio never lands on the chat half's landing page. A pre-v2 store
+that still carries the open-tabs record under the bare
 key `current` is folded into `session|current` at first boot, the legacy
 tabs first, so a link made in the chat meanwhile never shadows them. The
 binding also rides in the canvas record's `session` field — the
@@ -216,7 +220,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the whole app — the sidebar at the left (the open canvases, named and dotted; the + makes a blank one; the × closes one — never the last — warning first when it is unsaved; the ⌘K door is the switcher — New canvas / AI agent / the saved list / the jump between them; the chevron folds it to a rail), the head above the canvas (the Chat → door to the chat half — a bound canvas lands in its conversation, every other one in the half itself — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves), the canvas, the right-click menus; one self-contained page |
+| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (the session list: an open canvas, its chat, or a chat-only session; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head above it carries the Chat → door — a bound canvas opens its conversation, every other one a session, never the landing — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |
@@ -233,7 +237,7 @@ one stays on the server.
 | `tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
 | `tools/chat_job.py` | the AI agent canvas's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
 | `studio/frontend/src/lib/canvasLink.ts` | the session seam, chat side: reads the canvas rows the canvas half seals (a row's key is the AAD its record is sealed under), writes the binding — mints the canvas a session binds to, appends its tab to the shared `session|current` record — and hands the agent the read-only `read_canvas` tool |
-| `studio/` | the Chat half, vendored: AI Studio's React SPA (`frontend/dist` served at `/chat`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
+| `studio/` | the Chat half, vendored: AI Studio's React SPA (mounted by the one shell page at `/chat` from `frontend/dist/.vite/manifest.json`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
 | `tools/tls_local.sh` | the tiny local CA + server certificate (`.certs/`, git-ignored) for reaching the app over https from your own devices |
 | `tests/agent_test.py` | the live end-to-end: a real agent connects and a design runs (`--live`) |
 | `weights/` | where `export weights …` writes, and a place to drop pt / safetensors / gguf files for the pickers |

@@ -4764,10 +4764,10 @@ check("the project list: named, dotted, switched \u2014 and saved from the item"
   ok(__t.bxSwitchToggle() === true, "the search door opens the switcher");
   const labels = () => getEl("bxswitchList").querySelectorAll(".bxswitch-label")
     .map(l => l.textContent);
-  eql(labels(), ["New canvas", "AI agent", "Saved canvas \u2026", "New Project 1"],
+  eql(labels(), ["New session", "AI agent", "Saved canvas \u2026", "New Project 1"],
       "three ways in, then the open canvases");
   getEl("bxswitchList").querySelectorAll(".bxswitch-label")
-    .find(l => l.textContent === "New canvas")._parent.click();
+    .find(l => l.textContent === "New session")._parent.click();
   const t2 = __t.bxProject();
   eql([t2.name, t2.dirty], ["New Project 2", false], "a new blank canvas, nothing unsaved");
   eql(__t.BX.nodes.filter(n => n.kind === "input").length, 1,
@@ -4962,8 +4962,8 @@ check("the theme: Salon dark at home, light one click away, remembered", () => {
   ok(document.documentElement.getAttribute("data-theme") === "light",
      "\u2026and the page wears the attribute the light tokens hang on");
   eql(__t.bxThemeToggle(), "dark", "and back");
-  ok(document.documentElement.getAttribute("data-theme") === null,
-     "\u2026the attribute off: dark needs no attribute");
+  ok(document.documentElement.getAttribute("data-theme") === "dark",
+     "\u2026and dark is worn explicitly, the one theme both halves read");
   const th = getEl("bxtTheme");
   th.click();                                   // the real click, through the wiring
   eql(__t.bxThemeNow(), "light", "the button itself toggles too");
@@ -6221,7 +6221,7 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   __t.BXACCT.known = false;                    // ask again, as a fresh load would
   __t.bxAccountLoad();
   await flush();                               // the account load settles
-  ok(!getEl("bxuser").hidden && getEl("bxuname").textContent === "guest",
+  ok(!getEl("bxuser").hidden && getEl("bxuname").textContent === "Guest",
      "\u2026then the confirmed guest appears");
   eql(__t.bxAccountSaveForm(), false, "a guest has no save dialog");
   ok(__t.bxAccountLogin() === true, "the login dialog opens");
@@ -6231,8 +6231,8 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   ok(__t.bxtAccountToggle() === true && !getEl("bxtAccountMenu").hidden,
      "the account menu opens");
   const guestItems = getEl("bxtAccountMenu").children.map(c => c.textContent);
-  ok(guestItems.some(t => t.indexOf("create an account") === 0) &&
-     guestItems.some(t => t.indexOf("log in with your key") === 0) &&
+  ok(guestItems.some(t => t.indexOf("Create an account") === 0) &&
+     guestItems.some(t => t.indexOf("Sign in") === 0) &&
      !guestItems.some(t => t.indexOf("save this canvas") === 0),
      "a guest is offered an account, not saving: " + guestItems.join(" | "));
   __t.bxtDropsClose();
@@ -6360,7 +6360,7 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   __t.BXACCT.key = null;
   __t.BXACCT.locked = true;
   __t.bxAccountSync();
-  eql(getEl("bxuname").textContent, "account 🔒", "without the key the account is locked");
+  eql(getEl("bxuname").textContent, made.slice(4, 10), "without the key the account is named, and the menu offers the unlock");
   eql(__t.bxAccountSaveForm(), false, "\u2026saving waits for the unlock");
   __t.bxAccountUnlockForm();
   const f3 = getEl("bxmenu");
@@ -6373,7 +6373,7 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
      "a wrong key cannot unlock");
   f3.querySelectorAll(".bxinp")[0].value = made;
   f3.querySelectorAll(".chip").find(c => String(c.textContent) === "unlock").click();
-  ok(await until(() => getEl("bxuname").textContent === made.slice(4, 10)),
+  ok(await until(() => getEl("bxuname").textContent === made.slice(4, 10) && !__t.BXACCT.locked),
      "the real key unlocks it");
   ok(await __t.bxKeyGet("u_1"), "\u2026and the cache holds it again");
   __t.bxMenuClose();
@@ -6404,7 +6404,7 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   // logging out: a guest again, and the browser forgets the key
   __t.bxAccountLogout();
   eql(__t.BXACCT.user, null, "logging out is a guest again");
-  eql(getEl("bxuname").textContent, "guest", "\u2026and the header block says so");
+  eql(getEl("bxuname").textContent, "Guest", "\u2026and the header block says so");
   ok(!__t.bxSessionHint(), "\u2026the shared session hint is gone");
   await flush();
   eql(await __t.bxKeyGet("u_1"), null, "\u2026and the cached key left with it");
@@ -6476,7 +6476,7 @@ checkAsync("the door: guests to the landing page, accounts to their place", asyn
   __t.bxAccountLoad();
   await flush();
   eql(global.location.replaced, "", "\u2026and /studio is the canvas, never a bounce");
-  eql(getEl("bxuname").textContent, "guest", "\u2026a guest's canvas, as before");
+  eql(getEl("bxuname").textContent, "Guest", "\u2026a guest's canvas, as before");
   // 3. an account that left off in Chat: the door sends it back there
   me = { id: "u-door", name: "tester" };
   place = "chat";
@@ -6521,11 +6521,24 @@ checkAsync("the door: guests to the landing page, accounts to their place", asyn
   else global.fetch = keepFetch;
 });
 
-checkAsync("the head's door to the chat half: it stands on every canvas, marks every crossing, and a bound one names its conversation", async () => {
+checkAsync("the head's door to the chat half: it stands on every canvas, and the crossing is live", async () => {
   const turn = () => new Promise(r => setImmediate(r));
-  const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
+  const flush = async () => { for (let i = 0; i < 10; i++) await turn(); };
   const keepLoc = global.location;
-  global.location = { pathname: "/studio", replaced: "", replace(u) { this.replaced = String(u); } };
+  const keepHist = global.history;
+  global.location = { pathname: "/studio" };
+  global.history = { replaceState() {}, pushState(_s, _t, u) { this.pushed = String(u); } };
+  const keepChat = global.__nnChat;
+  const opened = [];
+  global.__nnChat = {                          // the embedded app's bridge
+    open(id) { opened.push(id); },
+    newSession() { opened.push(null); },
+    active() { return null; },
+    list() { return []; },
+    state() { return "guest"; },
+    ready() { return false; },
+    locked() { return false; },
+  };
   const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key,
                      locked: __t.BXACCT.locked, known: __t.BXACCT.known };
   // a guest: the save the door waits on is a no-op, so the door is instant
@@ -6536,9 +6549,8 @@ checkAsync("the head's door to the chat half: it stands on every canvas, marks e
   const arrive = __t.BX.active;
   let plain = null;
   try {
-    // a canvas that belongs to no conversation: the door stands, and it
-    // crosses with the mark that tells the chat half "a session, not the
-    // landing"
+    // a canvas that belongs to no conversation: the door stands, and the
+    // crossing stays in the page — the chat main comes up, a session opens
     plain = (__t.BX.projects || []).filter(x => x.kind !== "ai").pop() || __t.bxTabNew();
     if (plain.id !== __t.BX.active) __t.bxTabSelect(plain.id);
     plain.session = null;
@@ -6547,26 +6559,31 @@ checkAsync("the head's door to the chat half: it stands on every canvas, marks e
     eql(getEl("bxtChat").title, "to the chat half", "\u2026and it names the half, not a conversation");
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat?door=studio", "\u2026and it crosses with the door's mark");
+    ok(getEl("view-training").hidden && !getEl("nn-chat").hidden,
+       "\u2026and the chat main takes the page without a load");
+    eql(global.history.pushed, "/chat", "\u2026the address is the chat half");
+    eql(opened, [null], "\u2026and a session opens (never the landing)");
     // the same canvas, bound to a conversation: the door names it
     plain.session = "77";
     __t.bxHeadRefresh();
     eql(getEl("bxtChat").title, "back to the chat conversation this canvas belongs to",
         "\u2026and the bound canvas says which conversation it is");
-    global.location.replaced = "";
+    opened.length = 0;
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat?conversation=77&door=studio", "\u2026and it names that conversation for the crossing");
+    eql(global.history.pushed, "/chat?conversation=77", "\u2026and the address names that conversation");
+    eql(opened, [77], "\u2026and the chat opens it");
     // the AI agent's canvas is a conversation of its own — the door stands
     // there too
     (__t.BX.projects || []).find(x => x.kind === "ai") || __t.bxTabNewAI();
     __t.bxHeadRefresh();
     ok(!getEl("bxtChat").hidden, "\u2026and it stands on the AI canvas as well");
     eql(getEl("bxtChat").title, "to the chat half", "\u2026naming the half, not the canvas's own conversation");
-    global.location.replaced = "";
+    opened.length = 0;
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat?door=studio", "\u2026and from there, too, it crosses with the mark");
+    eql(global.history.pushed, "/chat", "\u2026and from there, too, a session opens in the chat half");
+    eql(opened, [null], "\u2026with no landing page in between");
     // the canvas is still where it was when the user comes back
     __t.bxTabSelect(plain.id);
     await flush();
@@ -6577,6 +6594,10 @@ checkAsync("the head's door to the chat half: it stands on every canvas, marks e
     __t.BXACCT.key = keepAcct.key;
     __t.BXACCT.locked = keepAcct.locked;
     __t.BXACCT.known = keepAcct.known;
+    if (keepChat === undefined) delete global.__nnChat;
+    else global.__nnChat = keepChat;
+    if (keepHist === undefined) delete global.history;
+    else global.history = keepHist;
     if (keepLoc === undefined) delete global.location;
     else global.location = keepLoc;
   }

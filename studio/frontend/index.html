@@ -37,17 +37,28 @@
     />
     <style>
       html,
-      body {
+      body,
+      #nn-chat {
         background: #fafaf7;
       }
+      html,
+      body,
+      #nn-chat {
+        height: 100%;
+        margin: 0;
+      }
+      #nn-chat {
+        overflow: hidden;
+      }
       html[data-theme="dark"],
-      html[data-theme="dark"] body {
+      html[data-theme="dark"] body,
+      html[data-theme="dark"] #nn-chat {
         background: #1a1a19;
       }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="nn-chat"><div id="root"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -101,13 +101,23 @@ if [ "${1:-}" = "--live" ]; then
 
   step "live chat half (the SPA)"
   C=$(curl -s -m 10 localhost:8124/chat)
-  A=$(printf '%s' "$C" | grep -o '/chat/assets/[^"]*\.js' | head -1)
-  CODE=""
-  [ -n "$A" ] && CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124$A")
-  if printf '%s' "$C" | grep -q '<html' && [ "$CODE" = "200" ]; then
+  M=$(curl -s -m 10 localhost:8124/chat/.vite/manifest.json)
+  A=$(printf '%s' "$M" | "$PY" -c 'import json,sys
+m = json.load(sys.stdin)
+e = m.get("index.html") or next((v for v in m.values() if v.get("isEntry")), None)
+print(e.get("file", "") if e else "")' 2>/dev/null)
+  K=$(printf '%s' "$M" | "$PY" -c 'import json,sys
+m = json.load(sys.stdin)
+e = m.get("index.html") or next((v for v in m.values() if v.get("isEntry")), None)
+print((e.get("css") or [""])[0] if e else "")' 2>/dev/null)
+  CODE=""; KCODE=""
+  [ -n "$A" ] && CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124/chat/$A")
+  [ -n "$K" ] && KCODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124/chat/$K")
+  if printf '%s' "$C" | grep -q 'id="nn-chat"' && printf '%s' "$C" | grep -q 'id="bxsidebar"' \
+     && [ "$CODE" = "200" ] && [ "$KCODE" = "200" ]; then
     ok
   else
-    bad; echo "    assets=${A:-none} status=${CODE:-none} (a build without VITE_BASE_PATH=chat emits /assets/… and serves blank — see studio/README.md)"
+    bad; echo "    shell=$(printf '%s' "$C" | grep -c 'id="nn-chat"') entry=${A:-none}/$CODE css=${K:-none}/$KCODE (a build without VITE_BASE_PATH=chat, or a missing manifest, serves the blank/incomplete page — see studio/README.md)"
   fi
 
   step "live landing (the door and /studio)"

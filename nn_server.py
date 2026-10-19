@@ -725,7 +725,10 @@ class Handler(BaseHTTPRequestHandler):
         /chat, and its API — /chat/auth/*, /chat/v1/*, /chat/healthz — answered
         in-process by the gateway behind nn_gateway's ASGI bridge."""
         if path in ("/chat", "/chat/"):
-            self._studio_file(os.path.join(STUDIO_WEB, "index.html"))
+            # The one shared shell page. It mounts the built chat app (found
+            # through /chat/.vite/manifest.json) in its chat main area, so the
+            # top bar and left menu are the same DOM across a half switch.
+            self._studio_file(UI)
             return True
         if (path.startswith("/chat/v1/") or path.startswith("/chat/auth/")
                 or path == "/chat/healthz"):
@@ -740,7 +743,7 @@ class Handler(BaseHTTPRequestHandler):
             if os.path.isfile(full):
                 self._studio_file(full)
             else:
-                self._studio_file(os.path.join(STUDIO_WEB, "index.html"))
+                self._studio_file(UI)
             return True
         return False
 

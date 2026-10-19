@@ -77,6 +77,10 @@ const SETTINGS_KEY = "aistudio.settings";
 const SIDEBAR_KEY = "aistudio.sidebarCollapsed";
 const WORKSPACE_KEY = "aistudio.workspace";
 const THEME_KEY = "aistudio.theme";
+/** True when the page is the one shared shell (Studio + Chat) rather than the
+    standalone build: the host renders the top bar and left menu, and drives
+    the chat through `window.__nnChat`. */
+const EMBEDDED = typeof window !== "undefined" && !!(window as any).__NN_EMBEDDED;
 /** How long a theme switch takes to ease (matches the `theme-flip` transitions in index.css). */
 const THEME_FLIP_MS = 700;
 const SAVE_DEBOUNCE_MS = 300;
@@ -512,9 +516,11 @@ export default function App() {
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const themeFlipTimer = useRef<number | null>(null);
-  const [theme, setTheme] = useState<Theme>(() =>
-    document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const scope = typeof document !== "undefined" ? document.getElementById("nn-chat") : null;
+    const attr = scope?.getAttribute("data-theme") ?? document.documentElement.getAttribute("data-theme");
+    return attr === "dark" ? "dark" : "light";
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [appOverrides, setAppOverrides] = useState<AppOverrides>({});
@@ -823,8 +829,9 @@ export default function App() {
         }
         setAccount(me.user);
         setAccountState("user");
-        // Where the account is, for the door (backend-side): Chat.
-        void savePlace("chat");
+        // Where the account is, for the door (backend-side): Chat — unless the
+        // one shared shell owns the place, because the user may be in Studio.
+        if (!EMBEDDED) void savePlace("chat");
         const key = await getCachedKey(me.user.id);
         if (cancelled) return;
         if (!key) {
@@ -1028,8 +1035,10 @@ export default function App() {
     setCodeApp(null);
   }, [activeId, activeStudioId]);
 
-  // ⌘K / Ctrl+K opens the switcher.
+  // ⌘K / Ctrl+K opens the switcher. The one shared shell owns that door when
+  // the chat is embedded (its switcher spans both halves), so stay quiet here.
   useEffect(() => {
+    if (EMBEDDED) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
@@ -1169,6 +1178,12 @@ export default function App() {
     // The colours ease only while the class is on <html>; the rest of the app keeps its own timing.
     root.classList.add("theme-flip");
     root.setAttribute("data-theme", next);
+    // The scoped chat CSS reads the theme from its own root; keep it in step.
+    const scope = document.getElementById("nn-chat");
+    if (scope) {
+      scope.classList.add("theme-flip");
+      scope.setAttribute("data-theme", next);
+    }
     if (themeFlipTimer.current !== null) window.clearTimeout(themeFlipTimer.current);
     themeFlipTimer.current = window.setTimeout(() => {
       root.classList.remove("theme-flip");
@@ -1181,6 +1196,25 @@ export default function App() {
     }
     setTheme(next);
   };
+
+  // The shell owns the theme when the chat is embedded: mirror its value onto
+  // the app's scope (the scoped CSS reads `#nn-chat[data-theme]`).
+  useEffect(() => {
+    if (!EMBEDDED) return;
+    const scope = document.getElementById("nn-chat");
+    if (scope && scope.getAttribute("data-theme") !== theme) scope.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  // ...and when the shell flips it, follow (its button is the only one shown).
+  useEffect(() => {
+    if (!EMBEDDED) return;
+    const onTheme = (e: Event) => {
+      const next = (e as CustomEvent).detail;
+      if (next === "dark" || next === "light") setTheme(next);
+    };
+    window.addEventListener("nn:theme", onTheme);
+    return () => window.removeEventListener("nn:theme", onTheme);
+  }, []);
 
   /**
    * Web tools: the model asks to search or fetch. Each call asks first unless Settings turns that off,
@@ -1415,6 +1449,15 @@ export default function App() {
   // completed this session (they're on the ready screen about to send).
   useEffect(() => {
     if (!loaded) return;
+    // The shell's live switch may hand the chat a destination (the Studio
+    // door): it is consumed once, exactly like the URL's door parameters.
+    const forced = (window as any).__NN_CHAT_OPEN;
+    if (forced !== undefined) {
+      delete (window as any).__NN_CHAT_OPEN;
+      if (typeof forced === "number" && conversations.some((c) => c.id === forced)) openConversation(forced);
+      else newSession();
+      return;
+    }
     if (activeId == null && activeStudioId == null && !needsUnlock) {
       const params = new URLSearchParams(window.location.search);
       const wanted = Number(params.get("conversation"));
@@ -1459,6 +1502,39 @@ export default function App() {
     else newSession();
   }, [loaded, accountState, guest, platform, activeId, activeStudioId, needsUnlock, newSession, openConversation, conversations]);
 
+  // The one shared shell renders the session list and drives the chat through
+  // this bridge: it asks for a conversation by id, starts a session, opens the
+  // account-wide settings, and reads the list back. Only when embedded — a
+  // standalone /chat page keeps its own chrome and routing.
+  useEffect(() => {
+    if (!EMBEDDED || typeof window === "undefined") return;
+    const api = {
+      open: (id: number) => openConversation(id),
+      newSession: () => newSession(),
+      settings: () => setShowSettings(true),
+      auth: (mode: "signin" | "signup") => setAuthMode(mode),
+      active: () => activeId,
+      state: () => accountState,
+      locked: () => needsUnlock,
+      ready: () => loaded,
+      list: () =>
+        conversations
+          .filter((c) => c.kind !== "build")
+          .map((c) => ({
+            id: c.id,
+            title: c.title || "New session",
+            canvasId: c.canvasId,
+            createdAt: c.createdAt ?? c.id,
+          })),
+    };
+    (window as any).__nnChat = api;
+    // Re-render the shell's list and its active highlight on every change.
+    window.dispatchEvent(new CustomEvent("nnchat:update"));
+    return () => {
+      if ((window as any).__nnChat === api) delete (window as any).__nnChat;
+    };
+  }, [loaded, accountState, activeId, conversations, openConversation, newSession, needsUnlock]);
+
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
     user: AccountUser,
@@ -1476,7 +1552,7 @@ export default function App() {
       setNeedsUnlock(false);
       setAccount(user);
       setAccountState("user");
-      void savePlace("chat");                  // the door routes arrivals here
+      if (!EMBEDDED) void savePlace("chat");    // the door routes arrivals here
       onboardedThisSessionRef.current = false;
       // A fresh account claims what the guest set up in this session (its providers and agents, sealed and uploaded). An existing profile is authoritative instead.
       const fresh = providers.length === 0 && agents === null;
@@ -3164,6 +3240,7 @@ export default function App() {
   // network must not hold the door shut.
   const goStudio = async () => {
     if (!cloudRef.current) {
+      if (EMBEDDED) { (window as any).__nnShell?.studio?.(); return; }
       window.location.href = "/studio";
       return;
     }
@@ -3184,6 +3261,7 @@ export default function App() {
         canvasNamesRef.current.set(linked, name);
       }
     }
+    if (EMBEDDED) { (window as any).__nnShell?.studio?.(canvasId); return; }
     window.location.href = "/studio?canvas=" + canvasId;
   };
 
@@ -3198,35 +3276,9 @@ export default function App() {
     </button>
   );
 
-  return (
-    <div className="app">
-      <TopBar
-        account={account}
-        accountState={accountState}
-        onSignIn={() => setAuthMode("signin")}
-        onSignUp={() => setAuthMode("signup")}
-        onSignOut={signOutUser}
-        onOpenSettings={() => setShowSettings(true)}
-      />
-      <div className="app-frame">
-        {active != null && !activeStudio && !inThread && (
-          <Sidebar
-            conversations={conversations.filter((c) => c.kind !== "build")}
-            activeId={activeId}
-            activeTypedTitle={typedTitle}
-            streamingId={streamingId}
-            collapsed={sidebarCollapsed}
-            open={sidebarOpen}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            onSelect={openConversation}
-            onNewSession={newSession}
-            onDelete={deleteConversation}
-            onOpenSearch={() => setShowSwitcher(true)}
-            onToggleCollapsed={toggleSidebarCollapsed}
-            onClose={() => setSidebarOpen(false)}
-          />
-        )}
+  // The one shared shell (top bar + left menu) lives on the host page when
+  // the chat is embedded; the app then renders its main area alone.
+  const main = (
         <div className="main">
           {active != null && !activeStudio && (
             <RunningHead
@@ -3360,7 +3412,9 @@ export default function App() {
                 // ahead anyway bounces back in the wall with the same note.
                 if (!guestCanStart) setModelWarning(true);
               }}
-              onOpenAuth={(mode) => setAuthMode(mode)}
+              onOpenAuth={(mode) =>
+                EMBEDDED ? (window as any).__nnShell?.auth?.(mode) : setAuthMode(mode)
+              }
               source={effectiveSource("greeting", appOverrides)}
               signedIn={accountState === "user"}
               composer={{
@@ -3382,7 +3436,45 @@ export default function App() {
             </main>
           )}
         </div>
-      </div>
+  );
+
+  return (
+    <div className={EMBEDDED ? "app embedded" : "app"}>
+      {!EMBEDDED && (
+        <TopBar
+          account={account}
+          accountState={accountState}
+          onSignIn={() => setAuthMode("signin")}
+          onSignUp={() => setAuthMode("signup")}
+          onSignOut={signOutUser}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+      )}
+      {EMBEDDED ? (
+        main
+      ) : (
+        <div className="app-frame">
+          {active != null && !activeStudio && !inThread && (
+            <Sidebar
+              conversations={conversations.filter((c) => c.kind !== "build")}
+              activeId={activeId}
+              activeTypedTitle={typedTitle}
+              streamingId={streamingId}
+              collapsed={sidebarCollapsed}
+              open={sidebarOpen}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              onSelect={openConversation}
+              onNewSession={newSession}
+              onDelete={deleteConversation}
+              onOpenSearch={() => setShowSwitcher(true)}
+              onToggleCollapsed={toggleSidebarCollapsed}
+              onClose={() => setSidebarOpen(false)}
+            />
+          )}
+          {main}
+        </div>
+      )}
       {showSwitcher && (
         <Switcher
           conversations={conversations.filter((c) => c.kind !== "build")}

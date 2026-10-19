@@ -48,8 +48,42 @@ function buildBase(mode: string): string {
   return mountPath(raw);
 }
 
+/** The chat's stylesheet is scoped to its own root, `#nn-chat`: the same CSS
+    serves the standalone build (whose page wraps the app in that element) and
+    the one shared shell (which mounts the app in its own `#nn-chat`), without
+    leaking generic rules (`body`, `button`, `.main`, `.btn`…) into the house
+    chrome around it. `:root`/`html`/`body` become the scope itself; `#root`
+    stays nested inside it. Keyframe bodies are left alone. */
+function chatScope() {
+  const SCOPE = "#nn-chat";
+  const rootish = (s: string) => /^(:root|html|body)(?![\w-])/.test(s);
+  const scope = (sel: string) => {
+    const s = sel.trim();
+    if (!s) return s;
+    if (s === SCOPE || s.startsWith(SCOPE + " ") || s.startsWith(SCOPE + ".") || s.startsWith(SCOPE + "[")) return s;
+    if (s === "#root" || s.startsWith("#root ") || s.startsWith("#root.") || s.startsWith("#root[")) {
+      return SCOPE + " " + s;
+    }
+    if (rootish(s)) return s.replace(/^(:root|html|body)/, SCOPE);
+    if (s.startsWith("[data-theme")) return SCOPE + s;   // the theme is the scope's own
+    return SCOPE + " " + s;
+  };
+  return {
+    postcssPlugin: "nn-chat-scope",
+    Once(root: any) {
+      root.walkRules((rule: any) => {
+        const parent = rule.parent;
+        if (parent && parent.type === "atrule" && /keyframes$/i.test(parent.name)) return;
+        rule.selectors = rule.selectors.map(scope);
+      });
+    },
+  } as any;
+}
+
 export default defineConfig(({ command, mode }) => ({
   plugins: [react()],
+  css: { postcss: { plugins: [chatScope()] } },
+  build: { manifest: true },
   // Served under the /dev/ prefix when the dev server (and preview) runs, so
   // every URL the browser requests — page, modules, HMR websocket, and the
   // app's own /dev/v1 + /dev/auth calls — stays inside the prefix Caddy
