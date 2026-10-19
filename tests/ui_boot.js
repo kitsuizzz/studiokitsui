@@ -6522,7 +6522,7 @@ checkAsync("the door: guests to the landing page, accounts to their place", asyn
   else global.fetch = keepFetch;
 });
 
-checkAsync("the top bar's half switch: one fixed place, Chat opens the session's chat and Studio its canvas", async () => {
+checkAsync("the head's half switch: Chat opens the session's chat and Studio its canvas", async () => {
   const turn = () => new Promise(r => setImmediate(r));
   const flush = async () => { for (let i = 0; i < 12; i++) await turn(); };
   const keepLoc = global.location;
@@ -6563,10 +6563,7 @@ checkAsync("the top bar's half switch: one fixed place, Chat opens the session's
   try {
     __t.bxShellInit();                         // the switch, and the shell's callbacks
     ok(getEl("bxtHalfChat") && getEl("bxtHalfStudio"),
-       "the top bar carries both halves in one place");
-    ok(getEl("bxtHalfStudio").classList.contains("on") &&
-       !getEl("bxtHalfChat").classList.contains("on"),
-       "\u2026with the current half filled in");
+       "the canvas head carries both halves in one place");
 
     // Chat, from a canvas that has no chat: the pair gains it, then the chat main
     plain = (__t.BX.projects || []).filter(x => x.kind !== "ai").pop() || __t.bxTabNew();
@@ -6578,9 +6575,6 @@ checkAsync("the top bar's half switch: one fixed place, Chat opens the session's
     await flush();
     ok(getEl("view-training").hidden && !getEl("nn-chat").hidden,
        "\u2026and the chat main takes the page without a load");
-    ok(getEl("bxtHalfChat").classList.contains("on") &&
-       !getEl("bxtHalfStudio").classList.contains("on"),
-       "\u2026and the switch follows the half");
     eql(attached.length, 1, "\u2026a session is a pair: the canvas gains its chat");
     ok(/^c_[0-9a-f]{16}$/.test(attached[0][0]) && attached[0][1] === plain.name,
        "\u2026the chat is created on the canvas's own id, named for it");
@@ -6601,9 +6595,6 @@ checkAsync("the top bar's half switch: one fixed place, Chat opens the session's
     ok(!getEl("view-training").hidden && getEl("nn-chat").hidden,
        "\u2026and the Studio half comes back without a load");
     eql(global.history.pushed, "/studio?canvas=c_stub", "\u2026the address is the session's canvas");
-    ok(getEl("bxtHalfStudio").classList.contains("on") &&
-       !getEl("bxtHalfChat").classList.contains("on"),
-       "\u2026and the switch says Studio");
     // the AI agent's tab is a conversation of its own: Chat crosses to a session
     const ai = (__t.BX.projects || []).find(x => x.kind === "ai") || __t.bxTabNewAI();
     if (ai && ai.id !== __t.BX.active) __t.bxTabSelect(ai.id);

@@ -22,9 +22,9 @@ dialog names the missing model (and points to **Settings**, the provider box),
 and a send that goes ahead anyway bounces back in the wall with the same note,
 in red. An account skips the welcome —
 its `place` record (the one unsealed record in its store, written by whichever
-half is opened) routes the arrival to the half it left off in. The canvas
-top bar's **Chat | Studio** switch is the welcome's one exception: it is a
-live crossing (the shell stays; only the main area swaps) and, from a canvas,
+half is opened) routes the arrival to the half it left off in. The
+**Chat | Studio** switch is the welcome's one exception: it is a live
+crossing (the shell stays; only the main area swaps) and, from a canvas,
 it opens that session's chat — a canvas with no chat yet gains one — and that
 outranks the holds: a guest's own conversation, or a signed-in account's
 (even one still on its no-model setup screen), opens in the thread it names;
@@ -34,8 +34,9 @@ one, never the welcome. A direct `/chat` load keeps
 the old arrival rules (`?conversation=`; `door=studio` for one-shot crossings;
 the welcome as a cold-start home). The lock is the one thing the door does not
 outrank — while the store is locked the unlock screen shows, and the switch
-re-runs once the key is back. The halves have one switch in their one top
-bar — the same place in both — and the address follows (`/chat`, `/studio`).
+re-runs once the key is back. The halves have one switch in their head row —
+next to Chat Kitsui in the chat, at the canvas head in Studio, the same corner
+on the welcome — and the address follows (`/chat`, `/studio`).
 The one place a conversation reaches the canvas is that switch (see **What
 runs**) — and the canvas side's **New session**
 does the same in reverse: it asks the chat for the session, which seals the

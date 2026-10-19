@@ -3349,6 +3349,26 @@ export default function App() {
   // kept alive and capped: the click navigates right after, and a slow
   // network must not hold the door shut.
 
+  // The head's Studio switch: the active conversation's canvas (sealing it
+  // if needed). On the welcome there is no session yet, so the canvas half
+  // simply comes up where it is.
+  const goStudio = async () => {
+    const conv = conversations.find((c) => c.id === activeId);
+    if (conv) { await studioFor(conv); return; }
+    if (EMBEDDED) { (window as any).__nnShell?.studio?.(); return; }
+    window.location.href = "/studio";
+  };
+
+  // The half switch: in the head, next to the Chat Kitsui chip (and floating
+  // in the same corner on the welcome). The shell is the only place the two
+  // halves meet, so it is only drawn when embedded.
+  const halfSwitch = EMBEDDED ? (
+    <div className="half-switch" role="group" aria-label="chat / studio">
+      <button type="button" className="on" aria-pressed="true">Chat</button>
+      <button type="button" aria-pressed="false" onClick={() => void goStudio()}>Studio</button>
+    </div>
+  ) : null;
+
   // The one shared shell (top bar + left menu) lives on the host page when
   // the chat is embedded; the app then renders its main area alone.
   const main = (
@@ -3364,6 +3384,7 @@ export default function App() {
               onMenu={() => setSidebarOpen((o) => !o)}
               onBack={inThread ? () => openConversation(active.parentId ?? active.id) : undefined}
               onOpenCode={inThread ? undefined : () => setCodeApp("conversation")}
+              halfSwitch={halfSwitch}
               modelPicker={
                 !inThread && activeAgent ? (
                   <AgentSwitcher
@@ -3477,7 +3498,9 @@ export default function App() {
               </div>
             </main>
           ) : atLanding ? (
-            <GreetingFrame
+            <>
+              {halfSwitch && <div className="landing-switch">{halfSwitch}</div>}
+              <GreetingFrame
               onNewSession={() => {
                 newSession();
                 // No model to talk to: warn on the way in. A send that goes
@@ -3497,6 +3520,7 @@ export default function App() {
                 sendBlocker,
               }}
             />
+            </>
           ) : (
             // The session is still resolving (a slow /auth/me, a pending
             // unlock). Never render nothing — a blank frame reads as "the UI

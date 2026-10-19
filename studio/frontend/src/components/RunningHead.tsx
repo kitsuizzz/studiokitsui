@@ -11,6 +11,8 @@ interface RunningHeadProps {
   /** The active model's context window, from the provider's /models endpoint. */
   maxTokens: number | null;
   onMenu: () => void;
+  /** The one Chat | Studio switch, first in the right group. */
+  halfSwitch?: ReactNode;
   /** The model switcher (the chip that opens the Server / BYOK menu). */
   modelPicker?: ReactNode;
   /** Open the Code pane for this app. */
@@ -31,6 +33,7 @@ export default function RunningHead({
   onMenu,
   onBack,
   onOpenCode,
+  halfSwitch,
   modelPicker,
   speeds,
   live,
@@ -57,6 +60,7 @@ export default function RunningHead({
         </div>
       </div>
       <div className="head-right">
+        {halfSwitch}
         {modelPicker}
         {onOpenCode && (
           <button
