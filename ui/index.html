@@ -9229,11 +9229,13 @@ function bxSessionNow() {
     const bare = bxBareCanvas(p.canvas);
     if (seen.has(bare)) continue;
     seen.add(bare);
-    tabs.push({ id: p.canvas, name: p.name });
+    // The bare id is the chat half's shape too — its unbind drops the tab by
+    // that id, so the shared record must carry it, not the row's prefixed one.
+    tabs.push({ id: bare, name: p.name });
   }
   const act = bxProject();
   return { tabs: tabs,
-           active: act && act.saved && act.canvas ? act.canvas : null };
+           active: act && act.saved && act.canvas ? bxBareCanvas(act.canvas) : null };
 }
 async function bxSessionPush() {               // after every open, close, switch,
   if (BXSESSION.hold) return false;            // save: which saved canvases were
@@ -9424,13 +9426,9 @@ function bxTabAnyDirty() {                     // any tab holding what the
 function bxConfirm(msg) {                      // the browser's own question —
   return typeof confirm === "function" ? !!confirm(msg) : true;   // none in tests
 }
-function bxTabClose(id) {                      // ×: close one project, asking
-  const p = bxProject(id);                     // first when it holds unsaved work —
-  if (!p) return false;                        // and never the last one: there is
-  if ((BX.projects || []).length <= 1) return false;   // always one canvas open
-  if (p.dirty && !bxConfirm("“" + p.name + "” has changes that are not "
-                            + "saved — close it anyway?"))
-    return false;
+function bxTabDrop(id) {                       // close without asking (the caller
+  const p = bxProject(id);                     // already did), even the last one
+  if (!p) return false;
   const wasActive = p.id === BX.active;
   BX.projects = (BX.projects || []).filter(x => x.id !== p.id);
   if (wasActive) {
@@ -9440,6 +9438,54 @@ function bxTabClose(id) {                      // ×: close one project, asking
       bxTabLoad(next);
     }
   }
+  return true;
+}
+function bxTabClose(id) {                      // ×: close one project, asking
+  const p = bxProject(id);                     // first when it holds unsaved work —
+  if (!p) return false;                        // and never the last one: there is
+  if ((BX.projects || []).length <= 1) return false;   // always one canvas open
+  if (p.dirty && !bxConfirm("“" + p.name + "” has changes that are not "
+                            + "saved — close it anyway?"))
+    return false;
+  bxTabDrop(id);
+  bxTabsRender();
+  bxSessionPush();
+  return true;
+}
+// The × on a session row means the session, not half of it: a paired canvas
+// asks the chat to remove the conversation and the canvas record (its link and
+// its tab), then closes every open tab of that canvas here — including old
+// duplicate tabs of the same canvas — so one click leaves nothing behind. A
+// canvas with no chat, or a shell without the bridge, keeps the old meaning:
+// close this tab.
+function bxSessionRemove(p, conv) {
+  const api = typeof window !== "undefined" ? window.__nnChat : null;
+  if (!(conv && api && api.remove)) return bxTabClose(p.id);
+  if (!bxConfirm("remove this session — its chat and its canvas?")) return false;
+  // The conversation's own canvas id wins; an older pairing that never landed
+  // on the conversation still knows its canvas on the tab.
+  const bare = conv.canvasId ? bxBareCanvas(conv.canvasId)
+             : (p.canvas ? bxBareCanvas(p.canvas) : "");
+  const doomed = (BX.projects || []).filter(x => x.id === p.id ||
+    (bare && x.canvas && bxBareCanvas(x.canvas) === bare));
+  for (const x of doomed) bxTabDrop(x.id);
+  if (!(BX.projects || []).length) bxTabNew();  // the Studio keeps one canvas
+  api.remove(conv.id, bare || null);
+  bxTabsRender();
+  bxSessionPush();
+  return true;
+}
+function bxSessionRemoveConv(conv) {            // the same × on a chat-only row
+  const api = typeof window !== "undefined" ? window.__nnChat : null;
+  if (!(conv && api && api.remove)) return false;
+  if (!bxConfirm("remove this session — its chat and its canvas?")) return false;
+  const bare = conv.canvasId ? bxBareCanvas(conv.canvasId) : "";
+  if (bare) {
+    const doomed = (BX.projects || []).filter(x => x.canvas && bxBareCanvas(x.canvas) === bare);
+    for (const x of doomed) bxTabDrop(x.id);
+    if (!(BX.projects || []).length) bxTabNew();
+  }
+  api.remove(conv.id, bare || null);
   bxTabsRender();
   bxSessionPush();
   return true;
@@ -9917,7 +9963,8 @@ function bxTabsRender() {                      // the one session list, shared b
     t.appendChild(tile);
     t.appendChild(mk("span", { class: "bxctitle", text: opts.name }));
     if (opts.close) {
-      const x = mk("span", { class: "bxclose", text: "\u00d7", title: "close this project" });
+      const x = mk("span", { class: "bxclose", text: "\u00d7",
+                            title: opts.closeTitle || "close this project" });
       x.addEventListener("click", (ev) => {
         if (ev && ev.stopPropagation) ev.stopPropagation();
         opts.close();
@@ -9936,7 +9983,11 @@ function bxTabsRender() {                      // the one session list, shared b
       ai: p.kind === "ai",
       dirty: p.dirty,
       active: chat ? (conv != null && conv.id === activeConv) : p.id === BX.active,
-      close: (BX.projects || []).length > 1 ? () => bxTabClose(p.id) : null,
+      // A session's × removes the pair — allowed even when it is the last open
+      // canvas (a fresh blank canvas takes its place). A lone canvas keeps the
+      // Studio's rule: the last one stays, so it wears no ×.
+      close: (conv || (BX.projects || []).length > 1) ? () => bxSessionRemove(p, conv) : null,
+      closeTitle: conv ? "remove this session" : "close this project",
       go: () => {
         if (chat) {
           if (conv) { bxChatOpen(conv.id); return; }
@@ -9956,6 +10007,8 @@ function bxTabsRender() {                      // the one session list, shared b
     row({
       name: c.title || "New session",
       active: chat && c.id === activeConv,
+      close: api && api.remove ? () => bxSessionRemoveConv(c) : null,
+      closeTitle: "remove this session",
       go: () => {
         if (chat) { bxChatOpen(c.id); return; }
         const api = window.__nnChat;

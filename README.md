@@ -126,14 +126,18 @@ boot skip the `/auth/me` round trip for guests; the server always has the last
 word. (The old `nnstudio_token` in localStorage is removed on load.)
 
 Designs are saved from the **sidebar** at the canvas's left, which lists the
-open canvases: `Ctrl/Cmd+S` saves the active one (a new project asks for its
-name first), the `+` above the list makes a blank canvas straight away, and
-the `⌘K` search door is the **switcher** — **New canvas**, **AI agent** and
-your saved canvases (each opens as its own canvas; saving over a name
-replaces it) — with the open canvases beneath, so a jump between them needs
-no mouse. Each canvas's `×` closes it (asking first when it holds unsaved
-changes; a reload or close with unsaved canvases asks too). The last canvas
-wears no `×` — there is always one canvas open. **AI agent** opens one that
+sessions (a chat and its canvas) and any canvas that has no chat yet:
+`Ctrl/Cmd+S` saves the active one (a new project asks for its name first), the
+`+` above the list makes a blank canvas straight away, and the `⌘K` search
+door is the **switcher** — **New canvas**, **AI agent** and your saved
+canvases (each opens as its own canvas; saving over a name replaces it) —
+with the open canvases beneath, so a jump between them needs no mouse. A
+session's `×` removes the session — its chat and its canvas; a canvas with no
+chat yet is simply closed (each asks first when it holds unsaved changes, as
+does a reload or close with unsaved work). A lone canvas that is the last
+open one wears no `×` — there is always one canvas open; a session keeps its
+`×` even when it is the only line, since a fresh blank canvas takes its
+place. **AI agent** opens one that
 is a conversation, not a canvas: the reverse-engineering agent, spoken to
 (see **The AI agent canvas** below). The canvases you leave open come back on
 your next visit — the list of them (with the one that was on screen) is the

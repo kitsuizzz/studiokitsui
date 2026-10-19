@@ -253,6 +253,7 @@ globalThis.__t = {
   bxThemeNow, bxThemeToggle,
   bxTabsRender, bxTabNew, bxTabSave, bxTabSelect, bxTabOpenSaved, bxProject,
   bxTabClose, bxTabAnyDirty, bxTabLoad, bxSessionNow, bxSessionPush, bxSessionMatch,
+  get BXCHAT() { return BXCHAT; },
   bxTabNewAI, bxTalkOn, bxTalkSend, bxTalkRender, bxTalkSync, bxTalkTask, bxTalkCurrent,
   bxHeadRefresh, bxChatGo, bxChatStudio, bxShellInit, bxViewSet,
   bxSessionRestore, bxSessionStored, bxAccountOpenApply, bxSplash, BXSESSION,
@@ -4839,6 +4840,44 @@ check("the project list: named, dotted, switched \u2014 and saved from the item"
   ok(__t.bxProject() === t1b, "…the one canvas stays");
   delete global.confirm;
   eql(strip(), ["New Project 1*"], "the list is tidy again");
+});
+
+check("the × on a session row removes the chat and its canvas", () => {
+  const boot = __t.bxProject();
+  const pair = __t.bxTabNew();
+  pair.name = "Paired";
+  pair.canvas = "canvas|c_x";
+  pair.session = 77;
+  pair.dirty = false;
+  const removed = [];
+  const asked = [];
+  global.__nnChat = { remove(id) { removed.push(id); } };
+  global.confirm = (msg) => { asked.push(String(msg)); return true; };
+  __t.BXCHAT.convs = [{ id: 77, title: "Paired", canvasId: "c_x" },
+                      { id: 88, title: "Loose chat", canvasId: null }];
+  __t.bxTabsRender();
+  const rows = getEl("bxlist").querySelectorAll(".bxcitem");
+  const pairRow = rows.find(t => t.querySelectorAll(".bxctitle")[0].textContent === "Paired");
+  ok(pairRow, "a paired canvas wears the chat's title in the list");
+  eql(pairRow.querySelectorAll(".bxclose")[0].title, "remove this session",
+      "its × says what it removes");
+  pairRow.querySelectorAll(".bxclose")[0].click();
+  ok(asked.length === 1 && asked[0].indexOf("remove this session") === 0,
+     "the × asks before removing the pair: " + asked.join("|"));
+  eql(removed, [77], "the chat half is asked to remove the conversation");
+  ok(!__t.bxProject(pair.id), "…and the canvas tab is closed here too");
+  ok(__t.bxProject(boot.id), "…while the other canvas stays");
+  const loose = getEl("bxlist").querySelectorAll(".bxcitem")
+    .find(t => t.querySelectorAll(".bxctitle")[0].textContent === "Loose chat");
+  ok(loose, "a chat with no open canvas is listed");
+  loose.querySelectorAll(".bxclose")[0].click();
+  eql(removed, [77, 88], "its × removes the conversation through the same bridge");
+  __t.BXCHAT.convs = [];
+  __t.bxTabsRender();
+  delete global.__nnChat;
+  delete global.confirm;
+  eql(getEl("bxlist").querySelectorAll(".bxcitem").length, 1,
+      "the list is back to the one boot canvas");
 });
 
 checkAsync("the AI agent canvas: a conversation, not a canvas", async () => {

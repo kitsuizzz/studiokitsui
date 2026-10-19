@@ -1695,6 +1695,7 @@ export default function App() {
     const api = {
       open: (id: number) => openConversation(id),
       newSession: () => newSession(),
+      remove: (id: number, canvasId?: string | null) => deleteConversation(id, canvasId),
       settings: () => setShowSettings(true),
       auth: (mode: "signin" | "signup") => setAuthMode(mode),
       active: () => activeId,
@@ -1725,7 +1726,7 @@ export default function App() {
       if ((window as any).__nnChat === api) delete (window as any).__nnChat;
     };
   }, [loaded, accountState, activeId, conversations, openConversation, newSession,
-      needsUnlock, atLanding, attachToCanvas, newStudioSession, studioFor]);
+      needsUnlock, atLanding, attachToCanvas, newStudioSession, studioFor, streamingId]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
@@ -1970,7 +1971,7 @@ export default function App() {
     return content;
   };
 
-  const deleteConversation = (id: number) => {
+  const deleteConversation = (id: number, canvasId?: string | null) => {
     if (streamingId === id) stop();
     // Deleting a conversation also drops the build threads it spawned.
     const remaining = conversations.filter((c) => c.id !== id && c.parentId !== id);
@@ -1981,10 +1982,13 @@ export default function App() {
     // record and its tab from the shared open-tabs record (best-effort — the
     // canvas side heals a record lost on its side at its next boot).
     const gone = conversations.find((c) => c.id === id);
-    if (cloudRef.current && gone?.canvasId) {
-      void unlinkSessionCanvas(cloudRef.current.key, gone.canvasId);
-      canvasNamesRef.current.delete(gone.canvasId);
-      canvasLinkedRef.current.delete(gone.canvasId);
+    // The conversation's own link is the canonical one; the shell passes the
+    // canvas its tab knows for an older pairing whose link never landed.
+    const linkedCanvas = gone?.canvasId ?? canvasId ?? null;
+    if (cloudRef.current && linkedCanvas) {
+      void unlinkSessionCanvas(cloudRef.current.key, linkedCanvas);
+      canvasNamesRef.current.delete(linkedCanvas);
+      canvasLinkedRef.current.delete(linkedCanvas);
     }
     if (activeId === id) {
       const list = [...remaining].sort(

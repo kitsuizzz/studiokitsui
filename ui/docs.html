@@ -213,9 +213,12 @@
     <b>sidebar lists the sessions</b>: one line per session — its chat and its
     canvas, titled with the name both halves use; a session made with only
     one half gets the other on the first crossing, so it is never two lines; a small <b>dot</b> marks changes
-    the server has not seen, an <b>×</b> closes a canvas (it asks first when
-    the changes are not saved — so does leaving the page; the last canvas has
-    none, one canvas always stays), and the canvases you leave open come back
+    the server has not seen, an <b>×</b> removes the session — its chat and
+    its canvas (a canvas with no chat yet is simply closed); it asks first
+    when the changes are not saved — so does leaving the page. A lone canvas
+    that is the last open one has no <b>×</b> (one canvas always stays); a
+    session keeps its <b>×</b> even when it is the only line, because a fresh
+    blank canvas takes its place. The canvases you leave open come back
     on your next visit — held in this browser, and, for a signed-in account,
     sealed at the server too. The same list serves the chat half: a line
     opens its canvas here and its conversation there. The
