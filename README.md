@@ -18,8 +18,9 @@ the GPU, which dials the app and stays connected (see **Backend** and
 agents, providers, web tools and the studio builder. One page serves both: the
 top bar and the left menu are the same DOM in either half — one session list,
 the same account, theme, and fold — and a crossing swaps only the main area.
-There is no Chat | Studio switch in the top bar: the **Chat →** and **Studio**
-doors are the way across.
+The chat half's welcome is full-bleed under that top bar: the left menu waits
+for the first session and comes back with it. There is no Chat | Studio switch
+in the top bar: the **Chat →** and **Studio** doors are the way across.
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
 lands on the landing page — the Chat half's welcome, where Create an account

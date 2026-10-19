@@ -1053,6 +1053,18 @@ export default function App() {
   const activeStudio = studios.find((s) => s.id === activeStudioId) ?? null;
   /** True while a build thread is open (a `kind: "build"` conversation). */
   const inThread = active?.kind === "build";
+  // The welcome: no session open, no lock, and either a guest or a signed-in
+  // account with no provider yet. The one shell hides its left menu for it —
+  // the landing is full-bleed under the top bar — and brings the menu back
+  // with the first session.
+  const atLanding =
+    loaded &&
+    !needsUnlock &&
+    activeStudio == null &&
+    active == null &&
+    codeApp !== "conversation" &&
+    (accountState === "guest" ||
+      (accountState === "user" && (guest == null || onboardedThisSessionRef.current)));
   const activeTitle = active?.title ?? "";
   const typedTitle = useTypewriter(activeTitle, titleAnimId);
 
@@ -1516,6 +1528,7 @@ export default function App() {
       active: () => activeId,
       state: () => accountState,
       locked: () => needsUnlock,
+      landing: () => atLanding,
       ready: () => loaded,
       list: () =>
         conversations
@@ -1533,7 +1546,7 @@ export default function App() {
     return () => {
       if ((window as any).__nnChat === api) delete (window as any).__nnChat;
     };
-  }, [loaded, accountState, activeId, conversations, openConversation, newSession, needsUnlock]);
+  }, [loaded, accountState, activeId, conversations, openConversation, newSession, needsUnlock, atLanding]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
@@ -3404,7 +3417,7 @@ export default function App() {
                 </div>
               </div>
             </main>
-          ) : accountState === "guest" || (accountState === "user" && (guest == null || onboardedThisSessionRef.current)) ? (
+          ) : atLanding ? (
             <GreetingFrame
               onNewSession={() => {
                 newSession();

@@ -1358,6 +1358,9 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   /* the chat half's main area, mounted inside the one shared shell */
   #nn-chat { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative;
              display: flex; flex-direction: column; }
+  /* the welcome is full-bleed under the top bar: the menu returns with the
+     first session (a door or "New session" opens one) */
+  html.at-landing #bxsidebar { display: none; }
   #nn-chat .app.embedded { height: 100%; }
   /* the chat's settings is a main-area view under the one shell, not a
      full-page takeover that would hide the top bar and left menu */
@@ -9503,7 +9506,7 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
 // The sidebar lists one set of sessions for both views: an open canvas, the
 // conversation bound to it, or a chat-only session.
 const BXVIEW = { half: "studio" };
-const BXCHAT = { loading: null, ready: false, convs: [], sig: "" };
+const BXCHAT = { loading: null, ready: false, convs: [], sig: "", landing: false, known: false };
 function bxViewIsChat() { return BXVIEW.half === "chat"; }
 // Every /chat address (the page, its slash, a fallback deep path) is the chat
 // main; /studio and / are the canvas. The built standalone page at
@@ -9516,6 +9519,13 @@ function bxAtChatPath() {
 // A canvas id has two spellings: the chat half's bare one and the store row's
 // `canvas|`-prefixed one. The one session list matches them as the same row.
 function bxBareCanvas(id) { return String(id == null ? "" : id).replace(/^canvas\|/, ""); }
+// The chat half's welcome is full-bleed under the one top bar: while it is the
+// main, the left menu steps aside (it returns with the first session). Until
+// the embedded app reports (a cold /chat load), stay in the landing's shape.
+function bxLandingApply() {
+  const landing = bxViewIsChat() && (BXCHAT.landing || !BXCHAT.known);
+  try { document.documentElement.classList.toggle("at-landing", landing); } catch (e) {}
+}
 // The account dialog is the chat half's (a proper overlay in both views); the
 // shell only opens it. A sign-in/out reloads the page so the canvas, the store,
 // and the chat all boot on the new account.
@@ -9538,6 +9548,7 @@ function bxViewSet(half) {
     document.title = BXVIEW.half === "chat" ? "Studio Kitsui — Chat" : "Studio Kitsui — Studio";
   } catch (e) {}
   if (BXACCT && BXACCT.user) bxPlaceNow(BXVIEW.half);
+  bxLandingApply();
   bxTabsRender();
 }
 async function bxChatEnsure() {
@@ -9593,7 +9604,10 @@ function bxChatReady() {
 // the store has it, otherwise a session opens (never the welcome). The app is
 // already mounted (it is mounted once, hidden, at boot), so it is told here.
 async function bxChatOpen(conv) {
+  if (!window.__nnChat) window.__NN_CHAT_OPEN = conv != null ? Number(conv) : null;
   await bxChatEnsure();
+  BXCHAT.known = true;                         // the door's target is a session
+  BXCHAT.landing = false;
   bxPushUrl(conv != null ? "/chat?conversation=" + conv : "/chat");
   bxViewSet("chat");
   const api = await bxChatReady();
@@ -9605,7 +9619,10 @@ async function bxChatOpen(conv) {
 // "New session" from the shell: a fresh chat session in the chat half, a new
 // canvas in the canvas half — the same door, whichever main is up.
 async function bxChatNew() {
+  if (!window.__nnChat) window.__NN_CHAT_OPEN = null;
   await bxChatEnsure();
+  BXCHAT.known = true;
+  BXCHAT.landing = false;
   bxViewSet("chat");
   bxPushUrl("/chat");
   const api = await bxChatReady();
@@ -9656,6 +9673,7 @@ function bxShellInit() {
     document.documentElement.classList.toggle("at-chat", BXVIEW.half === "chat");
     document.title = BXVIEW.half === "chat" ? "Studio Kitsui — Chat" : "Studio Kitsui — Studio";
   } catch (e) {}
+  bxLandingApply();                            // the menu waits for the app's report on /chat
   bxTabsRender();
   bxChatEnsure();                              // the session list lives in every view
   window.__nnShell = {
@@ -9680,6 +9698,11 @@ function bxShellInit() {
     const st = api.state ? api.state() : "";
     const ready = api.ready ? api.ready() : false;
     const locked = api.locked ? api.locked() : false;
+    if (ready) {
+      BXCHAT.known = true;
+      BXCHAT.landing = !!(api.landing && api.landing());
+      bxLandingApply();
+    }
     if (ready && BXACCT.known &&
         ((st === "user" && !BXACCT.user) || (st === "guest" && BXACCT.user) ||
          (st === "user" && BXACCT.locked && !locked))) {
