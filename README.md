@@ -33,15 +33,18 @@ off last time, which is the `place` record in its store: on the backend, so it
 follows the account to any device. The halves have their own addresses,
 `/chat` and `/studio` (the canvas never bounces) — the door is the navigation.
 
-A **session** is a conversation and the canvas it is bound to. The binding is
-made from the chat side: each open session carries a **Studio** door in its
-head, and the first click crosses to `/studio?canvas=<id>` — on the way it
-mints the canvas id, seals a fresh blank canvas under it (the row's key is
-the AAD its record is sealed with, `canvas|<id>`) and appends the canvas's
-tab to the shared open-tabs record (`session|current`); later clicks just
-cross. The crossings are live now: the shell stays, the main area swaps, and
-the address follows (`/studio?canvas=<id>` or `/chat`); the left menu lists
-the same sessions in both halves. On the canvas side the named canvas opens
+A **session** is a conversation and the canvas it is bound to — one thing,
+made whole from either side. Each chat session carries a **Studio** door in
+its head, and the first crossing seals its canvas (minting the id, sealing a
+blank under it — the row's key is the AAD its record is sealed with,
+`canvas|<id>` — and appending its tab to the shared open-tabs record,
+`session|current`); later crossings just open it. **New session** on the
+canvas side asks the chat for the session and seals its canvas, and a canvas
+made before its chat gains the conversation on its first crossing — likewise
+a chat-only session gains its canvas. The sidebar is one item per session:
+the chat and its canvas, never two. The crossings are live: the shell stays,
+the main area swaps, and the address follows (`/studio?canvas=<id>` or
+`/chat`); the left menu lists the same sessions in both halves. On the canvas side the named canvas opens
 as a tab, the saves keep the binding, and the head's **Chat →** door returns
 to the conversation — one with a conversation of its own opens it, every
 other (the AI canvas included) opens a session where the account left off
@@ -221,7 +224,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (the session list: an open canvas, its chat, or a chat-only session; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head above it carries the Chat → door — a bound canvas opens its conversation, every other one a session, never the landing — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
+| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head above it carries the Chat → door — a bound canvas opens its conversation, every other one a session, never the landing — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |

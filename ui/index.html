@@ -9059,7 +9059,11 @@ async function bxAccountSave(name, design, status, go, onSaved, bound) {
       }
       if (!id) id = "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
     }
-    const blob = await bxSealRecord(BXACCT.key, bxCanvasAad(id),
+    // The row id is the record's key (the AAD): `canvas|<id>`. Writing under
+    // it — and dropping a legacy bare row in the same write — keeps one row
+    // per canvas, so the chat half's link finds it.
+    const rowId = bxCanvasAad(id);
+    const blob = await bxSealRecord(BXACCT.key, rowId,
       { name: name, design: design, session: session });
     if (blob.length > BX_CANVAS_MAX)
       throw new Error("that design is too big to seal (" +
@@ -9067,7 +9071,9 @@ async function bxAccountSave(name, design, status, go, onSaved, bound) {
     if (go) go.textContent = "saving …";
     const r = await fetch("/chat/auth/store/sync", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ canvases: { upserts: [{ id: id, blob: blob }], deletes: [] } }) });
+      body: JSON.stringify({ canvases: {
+        upserts: [{ id: rowId, blob: blob }],
+        deletes: id !== rowId ? [id] : [] } }) });
     if (!r.ok) throw new Error("the server refused (HTTP " + r.status + ")");
     try { localStorage.setItem("nnstudio_canvas_name", name); } catch (e) {}
     if (status) status.textContent = "saved as " + name + " ✓ (sealed)";
@@ -9639,10 +9645,89 @@ async function bxShellSettings() {
 }
 // A session whose home is the canvas: bring its tab to the front (loading the
 // saved row when it is not open) and show the canvas main — the live switch.
-async function bxStudioOpen(id) {
-  if (id) await bxOpenCanvasId(id);
+async function bxStudioOpen(id, name) {
+  let opened = false;
+  if (id) opened = await bxOpenCanvasId(id);
+  if (id && !opened) {
+    // A session whose canvas is only in memory (a guest's, or one just
+    // minted): give it a tab carrying that id and the session's name, so
+    // the pair is one item with one identity.
+    const p = bxTabNew();
+    if (p) {
+      p.canvas = bxBareCanvas(id);
+      if (name) p.name = String(name);
+      bxTabsRender();
+    }
+  }
   bxViewSet("studio");
-  bxPushUrl(id ? "/studio?canvas=" + id : "/studio");
+  bxPushUrl(id ? "/studio?canvas=" + bxBareCanvas(id) : "/studio");
+}
+
+// A session is a pair: when a canvas gains its chat, the canvas record keeps
+// its design and records the conversation id — creating the record (under the
+// pair's id) when the canvas was never saved. A guest keeps the pair in memory.
+async function bxCanvasBindSession(p, convId) {
+  if (!p) return false;
+  p.session = String(convId);
+  if (!BXACCT.user || !BXACCT.key || typeof fetch !== "function") return true;
+  const bare = p.canvas ? bxBareCanvas(p.canvas)
+                        : "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
+  p.canvas = bare;
+  const aad = bxCanvasAad(bare);
+  try {
+    const rows = await bxCanvasRecords();
+    const row = rows.find(r => bxCanvasAad(r.id) === aad);
+    let rec = null;
+    if (row) {
+      rec = await bxOpenRecord(BXACCT.key, aad, row.blob);
+    } else {
+      const design = p.id === BX.active ? bxExportCanvas() : (p.doc || null);
+      if (!design) return false;
+      rec = { name: p.name, design: design, session: null };
+    }
+    rec.session = String(convId);
+    const blob = await bxSealRecord(BXACCT.key, aad, rec);
+    const r = await fetch("/chat/auth/store/sync", { method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ canvases: {
+        upserts: [{ id: aad, blob: blob }],
+        deletes: row && row.id !== aad ? [row.id] : [] } }) });
+    if (!r.ok) return false;
+    p.saved = true;
+    p.dirty = false;
+    bxTabsRender();
+    bxSessionPush();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// A canvas with no chat yet: create the missing half on the canvas's own id,
+// bind the record, and open the chat. The pair is then one session everywhere.
+async function bxChatAttachCanvas(p) {
+  if (!p || p.kind === "ai") { bxStudioTab(p); return; }
+  const api = await bxChatReady();
+  if (!api || !api.attach) { bxStudioTab(p); return; }
+  let id = p.canvas ? bxBareCanvas(p.canvas) : "";
+  if (!id) {
+    id = "c_" + bxHex(crypto.getRandomValues(new Uint8Array(8)));
+    p.canvas = id;
+  }
+  const cid = api.attach(id, p.name);
+  if (cid == null) { bxStudioTab(p); return; }
+  await bxCanvasBindSession(p, cid);
+  bxChatOpen(cid);
+}
+
+// "New session" from the canvas side: the chat half creates the session and
+// seals its canvas, then hands the canvas id back to open here.
+function bxNewStudioSession() {
+  const api = typeof window !== "undefined" ? window.__nnChat : null;
+  if (api && api.newStudioSession) { api.newStudioSession(); return; }
+  // The bridge is not up yet (the first breath, or a test): a plain canvas
+  // now; its chat is created on the first crossing, so the pair still forms.
+  bxTabNew();
 }
 // …from an already-open tab: the address names its saved canvas, or the plain
 // canvas half when it has never been saved.
@@ -9677,8 +9762,8 @@ function bxShellInit() {
   bxTabsRender();
   bxChatEnsure();                              // the session list lives in every view
   window.__nnShell = {
-    studio(canvasId) {
-      bxStudioOpen(canvasId);
+    studio(canvasId, name) {
+      bxStudioOpen(canvasId, name);
     },
     async auth(mode) {
       bxViewSet("chat");
@@ -9774,7 +9859,8 @@ function bxTabsRender() {                      // the one session list, shared b
       go: () => {
         if (chat) {
           if (conv) { bxChatOpen(conv.id); return; }
-          bxStudioTab(p);
+          if (p.kind === "ai") { bxStudioTab(p); return; }
+          bxChatAttachCanvas(p);               // the pair's chat, on this canvas
           return;
         }
         bxTabSelect(p.id);
@@ -9790,8 +9876,15 @@ function bxTabsRender() {                      // the one session list, shared b
       active: chat && c.id === activeConv,
       go: () => {
         if (chat) { bxChatOpen(c.id); return; }
-        if (c.canvasId) { bxOpenCanvasId(c.canvasId); return; }
-        bxChatOpen(c.id);                      // no canvas: the chat is its home
+        const api = window.__nnChat;
+        if (c.canvasId) {                      // the pair's canvas, opened here
+          bxOpenCanvasId(c.canvasId).then(ok => {
+            if (!ok && api && api.studioFor) api.studioFor(c.id);
+          });
+          return;
+        }
+        if (api && api.studioFor) { api.studioFor(c.id); return; }
+        bxChatOpen(c.id);                      // bridge not ready: the chat
       },
     });
   }
@@ -9902,7 +9995,7 @@ function bxSwitchBuild() {                      // the switcher's list, in its v
   if (!ql) {
     item("New session", "create", () => {
       bxSwitchClose();
-      if (bxViewIsChat()) bxChatNew(); else bxTabNew();
+      if (bxViewIsChat()) bxChatNew(); else bxNewStudioSession();
     });
     item("AI agent", "create", () => {
       bxSwitchClose();
@@ -9931,7 +10024,9 @@ function bxSwitchBuild() {                      // the switcher's list, in its v
     item(name, current ? "current" : "", () => {
       bxSwitchClose();
       if (chat) {
-        if (conv) bxChatOpen(conv.id); else bxStudioTab(p);
+        if (conv) { bxChatOpen(conv.id); return; }
+        if (p.kind === "ai") { bxStudioTab(p); return; }
+        bxChatAttachCanvas(p);
         return;
       }
       bxTabSelect(p.id);
@@ -9950,7 +10045,14 @@ function bxSwitchBuild() {                      // the switcher's list, in its v
     item(name, current ? "current" : (c.canvasId ? "" : "chat"), () => {
       bxSwitchClose();
       if (chat) { bxChatOpen(c.id); return; }
-      if (c.canvasId) { bxStudioOpen(c.canvasId); return; }
+      const api = window.__nnChat;
+      if (c.canvasId) {
+        bxOpenCanvasId(c.canvasId).then(ok => {
+          if (!ok && api && api.studioFor) api.studioFor(c.id);
+        });
+        return;
+      }
+      if (api && api.studioFor) { api.studioFor(c.id); return; }
       bxChatOpen(c.id);
     });
   }
@@ -11008,11 +11110,14 @@ function bxCanvasSaveActive() {                 // best-effort: seal the canvas 
       if (!design) return resolve(false);        // nothing on screen worth carrying
       (async () => {
         try {
-          const blob = await bxSealRecord(BXACCT.key, bxCanvasAad(p.canvas),
+          const rowId = bxCanvasAad(p.canvas);
+          const blob = await bxSealRecord(BXACCT.key, rowId,
             { name: p.name, design: design, session: p.session || null });
           const r = await fetch("/chat/auth/store/sync", { method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ canvases: { upserts: [{ id: p.canvas, blob: blob }], deletes: [] } }) });
+            body: JSON.stringify({ canvases: {
+              upserts: [{ id: rowId, blob: blob }],
+              deletes: p.canvas !== rowId ? [p.canvas] : [] } }) });
           if (r.ok) { p.dirty = false; resolve(true); return; }
         } catch (e) {}
         resolve(false);
@@ -11023,12 +11128,18 @@ function bxCanvasSaveActive() {                 // best-effort: seal the canvas 
 function bxChatGo() {                           // the head's door to the chat half
   const p = bxProject();
   if (!p) return;
-  // The crossing is live: the shell stays, the main area swaps. A bound
-  // canvas names its conversation; every other one (the AI agent's included)
-  // opens a session in the chat half — never the landing page.
+  // The crossing is live, and a session is a pair: a canvas with a chat opens
+  // that chat; a canvas without one gets its chat created on the same canvas;
+  // the AI tab is a conversation of its own and crosses to a fresh session.
   const conv = p.session != null ? Number(p.session) : null;
+  const ai = p.kind === "ai";
   let went = false;
-  const finish = () => { if (!went) { went = true; bxChatOpen(conv); } };
+  const finish = () => {
+    if (went) return;
+    went = true;
+    if (ai) { bxChatOpen(null); return; }
+    if (conv != null) bxChatOpen(conv); else bxChatAttachCanvas(p);
+  };
   setTimeout(finish, 2500);                     // the door does not wait on the post
   bxCanvasSaveActive().then(finish);
 }
@@ -11151,7 +11262,7 @@ function bxtInit() {
   if (rnew && rnew.addEventListener)
     rnew.addEventListener("click", () => {
       bxtDropsClose();
-      if (bxViewIsChat()) bxChatNew(); else bxTabNew();
+      if (bxViewIsChat()) bxChatNew(); else bxNewStudioSession();
     });
   if (ragent && ragent.addEventListener)
     ragent.addEventListener("click", () => { bxtDropsClose(); bxTabNewAI(); });

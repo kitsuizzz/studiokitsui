@@ -757,17 +757,40 @@ export default function App() {
     // session never points into a void.
     for (const conv of loadedConversations) {
       if (!conv.canvasId) continue;
-      const row = store.canvases.find((r) => r.id === "canvas|" + conv.canvasId);
+      // The canvas half's own rows are bare ids; the chat half's are
+      // `canvas|<id>`. Both are the same canvas.
+      const row = store.canvases.find(
+        (r) => r.id === "canvas|" + conv.canvasId || r.id === String(conv.canvasId),
+      );
       const record = row ? await openCanvasBlob(key, conv.canvasId, row.blob) : null;
       if (record && record.session === String(conv.id)) {
         canvasLinkedRef.current.add(conv.canvasId);
         canvasNamesRef.current.set(conv.canvasId, record.name);
+      } else if (row && record && record.session == null) {
+        // A canvas saved on the canvas side before the chat bound it: adopt
+        // it, its design intact, under the canonical row id.
+        try {
+          const aad = "canvas|" + conv.canvasId;
+          const blob = await encryptJson(
+            key,
+            { name: record.name, design: record.design, session: String(conv.id) },
+            aad,
+          );
+          await syncStore({ canvases: { upserts: [{ id: aad, blob }], deletes: row.id !== aad ? [row.id] : [] } });
+          canvasLinkedRef.current.add(conv.canvasId);
+          canvasNamesRef.current.set(conv.canvasId, record.name);
+        } catch {
+          // leave it; the next boot retries
+        }
       } else {
-        const fresh = await linkSessionCanvas(key, String(conv.id), conv.title || "Canvas", conv.canvasId);
+        // No canvas for this session, or the id belongs to another session:
+        // mint a fresh one (never overwrite someone else's design).
+        const canvasId = record ? mintCanvasId() : conv.canvasId;
+        const fresh = await linkSessionCanvas(key, String(conv.id), conv.title || "New session", canvasId);
         if (fresh) {
           conv.canvasId = fresh;
           canvasLinkedRef.current.add(fresh);
-          canvasNamesRef.current.set(fresh, conv.title || "Canvas");
+          canvasNamesRef.current.set(fresh, conv.title || "New session");
         }
       }
     }
@@ -1408,37 +1431,42 @@ export default function App() {
     [pruneEmpty]
   );
 
-  const newSession = useCallback(() => {
+  const newSession = useCallback((title = ""): Conversation => {
+    // The buttons pass their click event through the prop; only a string is a
+    // title. (The bridge and the canvas side pass one deliberately.)
+    const label = typeof title === "string" ? title : "";
     // Reuse an existing empty conversation instead of piling up blanks.
     const blank = conversations.find((c) => c.messages.length === 0 && c.id !== streamingId);
     if (blank) {
-      // A signed-in session carries its canvas from the start; the canvas
-      // record itself is created lazily, on the first Studio click.
-      if (cloudRef.current && !blank.canvasId) {
-        const next = { ...blank, canvasId: mintCanvasId() };
+      // A session is the chat and its canvas as one thing: a conversation
+      // carries its canvas id from the start (the canvas record itself is
+      // created on the first Studio click), guests included.
+      const next: Conversation = {
+        ...blank,
+        ...(blank.canvasId == null ? { canvasId: mintCanvasId() } : {}),
+        ...(label && !blank.title ? { title: label } : {}),
+      };
+      if (next.canvasId !== blank.canvasId || next.title !== blank.title) {
         setConversations((prev) => prev.map((c) => (c.id === blank.id ? next : c)));
       }
       openConversation(blank.id);
-      return;
+      return next;
     }
     const id = idRef.current++;
-    setConversations((prev) => [
-      ...prev,
-      {
-        id,
-        title: "",
-        messages: [],
-        inputTokens: 0,
-        outputTokens: 0,
-        createdAt: Date.now(),
-        // A signed-in session is bound to a canvas from the start; the canvas
-        // record is created lazily, on the first Studio click.
-        ...(cloudRef.current ? { canvasId: mintCanvasId() } : {}),
-      },
-    ]);
+    const conv: Conversation = {
+      id,
+      title: label,
+      messages: [],
+      inputTokens: 0,
+      outputTokens: 0,
+      createdAt: Date.now(),
+      canvasId: mintCanvasId(),
+    };
+    setConversations((prev) => [conv, ...prev]);
     setWallTextVisible(true);
     setActiveId(id);
     setSidebarOpen(false);
+    return conv;
   }, [conversations, streamingId, openConversation]);
 
   // Arrivals route by intent. The canvas half's "Chat →" door marks its
@@ -1514,6 +1542,68 @@ export default function App() {
     else newSession();
   }, [loaded, accountState, guest, platform, activeId, activeStudioId, needsUnlock, newSession, openConversation, conversations]);
 
+  // One session is a chat and its canvas. `studioFor` is the pair's door and
+  // its creator from the chat side: it mints and seals the canvas when the
+  // chat has none yet, then hands the id to the canvas half.
+  const studioFor = useCallback(async (conv: Conversation) => {
+    const canvasId = conv.canvasId ?? mintCanvasId();
+    if (conv.canvasId == null) {
+      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, canvasId } : c)));
+    }
+    if (cloudRef.current) {
+      const name = conv.title || "New session";
+      if (!canvasLinkedRef.current.has(canvasId)) {
+        const linked = await linkSessionCanvas(cloudRef.current.key, String(conv.id), name, canvasId, {
+          keepalive: true,
+          timeoutMs: 2500,
+        });
+        if (linked) {
+          canvasLinkedRef.current.add(linked);
+          canvasNamesRef.current.set(linked, name);
+        }
+      }
+    }
+    if (EMBEDDED) {
+      (window as any).__nnShell?.studio?.(canvasId, conv.title || "New session");
+      return;
+    }
+    window.location.href = "/studio?canvas=" + canvasId;
+  }, []);
+
+  // A canvas made on the canvas side (old or new) has no chat yet: a session
+  // is a pair, so the missing half is created on the canvas's own id — or the
+  // chat already in it opens.
+  const attachToCanvas = useCallback((canvasId: string, title: string) => {
+    const want = String(canvasId);
+    const found = conversations.find((c) => c.canvasId != null && String(c.canvasId) === want);
+    if (found) {
+      openConversation(found.id);
+      return found.id;
+    }
+    const id = idRef.current++;
+    const conv: Conversation = {
+      id,
+      title: title || "",
+      messages: [],
+      inputTokens: 0,
+      outputTokens: 0,
+      createdAt: Date.now(),
+      canvasId: want,
+    };
+    setConversations((prev) => [conv, ...prev]);
+    setWallTextVisible(true);
+    setActiveId(id);
+    setSidebarOpen(false);
+    return id;
+  }, [conversations, openConversation]);
+
+  // "New session" from the canvas side: the chat first (it mints the canvas
+  // id and seals the link), then the canvas main opens on it.
+  const newStudioSession = useCallback(() => {
+    const conv = newSession("New session");
+    void studioFor(conv);
+  }, [newSession, studioFor]);
+
   // The one shared shell renders the session list and drives the chat through
   // this bridge: it asks for a conversation by id, starts a session, opens the
   // account-wide settings, and reads the list back. Only when embedded — a
@@ -1529,6 +1619,12 @@ export default function App() {
       state: () => accountState,
       locked: () => needsUnlock,
       landing: () => atLanding,
+      attach: (canvasId: string, title: string) => attachToCanvas(canvasId, title),
+      studioFor: (id: number) => {
+        const c = conversations.find((x) => x.id === id);
+        if (c) void studioFor(c);
+      },
+      newStudioSession: () => newStudioSession(),
       ready: () => loaded,
       list: () =>
         conversations
@@ -1546,7 +1642,8 @@ export default function App() {
     return () => {
       if ((window as any).__nnChat === api) delete (window as any).__nnChat;
     };
-  }, [loaded, accountState, activeId, conversations, openConversation, newSession, needsUnlock, atLanding]);
+  }, [loaded, accountState, activeId, conversations, openConversation, newSession,
+      needsUnlock, atLanding, attachToCanvas, newStudioSession, studioFor]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
@@ -3251,32 +3348,14 @@ export default function App() {
   // re-linking when the record was lost on the canvas side. The sync is
   // kept alive and capped: the click navigates right after, and a slow
   // network must not hold the door shut.
+
   const goStudio = async () => {
-    if (!cloudRef.current) {
-      if (EMBEDDED) { (window as any).__nnShell?.studio?.(); return; }
-      window.location.href = "/studio";
-      return;
-    }
     const conv = conversations.find((c) => c.id === activeId);
     if (!conv) return;
-    const canvasId = conv.canvasId ?? mintCanvasId();
-    if (!conv.canvasId) {
-      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, canvasId } : c)));
-    }
-    const name = conv.title || "Canvas";
-    if (!canvasLinkedRef.current.has(canvasId)) {
-      const linked = await linkSessionCanvas(cloudRef.current.key, String(conv.id), name, canvasId, {
-        keepalive: true,
-        timeoutMs: 2500,
-      });
-      if (linked) {
-        canvasLinkedRef.current.add(linked);
-        canvasNamesRef.current.set(linked, name);
-      }
-    }
-    if (EMBEDDED) { (window as any).__nnShell?.studio?.(canvasId); return; }
-    window.location.href = "/studio?canvas=" + canvasId;
+    await studioFor(conv);
   };
+
+
 
   // The door itself, in the running head of an open session. A build thread
   // is a sub-dialog of a session, not a session — no door there (its canvas,
@@ -3478,7 +3557,7 @@ export default function App() {
               theme={theme}
               onToggleTheme={toggleTheme}
               onSelect={openConversation}
-              onNewSession={newSession}
+              onNewSession={() => newSession()}
               onDelete={deleteConversation}
               onOpenSearch={() => setShowSwitcher(true)}
               onToggleCollapsed={toggleSidebarCollapsed}
@@ -3493,7 +3572,7 @@ export default function App() {
           conversations={conversations.filter((c) => c.kind !== "build")}
           activeId={activeId}
           onSelect={openConversation}
-          onNew={newSession}
+          onNew={() => newSession()}
           onClose={() => setShowSwitcher(false)}
         />
       )}

@@ -36,7 +36,11 @@ outrank — while the store is locked the unlock screen shows, and the door
 re-runs once the key is back. The halves carry no switch in a top bar: the
 doors are what move between them, and the address follows (`/chat`,
 `/studio`). The one place a conversation reaches the canvas is its own
-**Studio** door (see **What runs**).
+**Studio** door (see **What runs**) — and the canvas side's **New session**
+does the same in reverse: it asks the chat for the session, which seals the
+canvas under the pair's id (the canvas half creates the conversation for a
+canvas that has none, and binds the existing design rather than replacing
+it), so a session is one item with both halves.
 
 ## What runs
 

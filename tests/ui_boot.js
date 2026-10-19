@@ -6342,7 +6342,8 @@ checkAsync("the account: guests by default, a bot check to sign up, sealed desig
   const row1 = server.rows[0];
   ok(!String(row1.blob).includes("my canvas"),
      "saving posts ciphertext only");
-  const opened = await __t.bxOpenRecord(cryptoKey, "canvas|" + row1.id, row1.blob);
+  // the row id is the record's AAD (the canonical `canvas|<id>`)
+  const opened = await __t.bxOpenRecord(cryptoKey, row1.id, row1.blob);
   eql(opened.name, "my canvas", "\u2026with the name sealed inside");
   eql((opened.design.nodes || []).length, nodes0 + 1,
      "\u2026and the whole design sealed");
@@ -6530,14 +6531,20 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and the
   global.history = { replaceState() {}, pushState(_s, _t, u) { this.pushed = String(u); } };
   const keepChat = global.__nnChat;
   const opened = [];
+  const attached = [];
   global.__nnChat = {                          // the embedded app's bridge
     open(id) { opened.push(id); },
     newSession() { opened.push(null); },
+    attach(canvasId, title) {
+      attached.push([String(canvasId), String(title || "")]);
+      return 99;                               // the conversation the pair gained
+    },
     active() { return null; },
     list() { return []; },
     state() { return "guest"; },
     ready() { return false; },
     locked() { return false; },
+    landing() { return false; },
   };
   const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key,
                      locked: __t.BXACCT.locked, known: __t.BXACCT.known };
@@ -6548,12 +6555,15 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and the
   __t.BXACCT.locked = false;
   const arrive = __t.BX.active;
   let plain = null;
+  let keepPlainCanvas;
   try {
     // a canvas that belongs to no conversation: the door stands, and the
     // crossing stays in the page — the chat main comes up, a session opens
     plain = (__t.BX.projects || []).filter(x => x.kind !== "ai").pop() || __t.bxTabNew();
     if (plain.id !== __t.BX.active) __t.bxTabSelect(plain.id);
+    keepPlainCanvas = plain.canvas;
     plain.session = null;
+    plain.canvas = "";
     __t.bxHeadRefresh();
     ok(!getEl("bxtChat").hidden, "the door stands on a canvas that belongs to no conversation");
     eql(getEl("bxtChat").title, "to the chat half", "\u2026and it names the half, not a conversation");
@@ -6561,8 +6571,12 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and the
     await flush();
     ok(getEl("view-training").hidden && !getEl("nn-chat").hidden,
        "\u2026and the chat main takes the page without a load");
-    eql(global.history.pushed, "/chat", "\u2026the address is the chat half");
-    eql(opened, [null], "\u2026and a session opens (never the landing)");
+    eql(attached.length, 1, "\u2026a session is a pair: the canvas gains its chat");
+    ok(/^c_[0-9a-f]{16}$/.test(attached[0][0]) && attached[0][1] === plain.name,
+       "\u2026the chat is created on the canvas's own id, named for it");
+    eql(plain.canvas, attached[0][0], "\u2026and the canvas wears that id");
+    eql(global.history.pushed, "/chat?conversation=99", "\u2026the address is that session's chat");
+    eql(opened, [99], "\u2026and its conversation opens (never the landing)");
     // the same canvas, bound to a conversation: the door names it
     plain.session = "77";
     __t.bxHeadRefresh();
@@ -6588,7 +6602,7 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and the
     __t.bxTabSelect(plain.id);
     await flush();
   } finally {
-    if (plain) plain.session = null;
+    if (plain) { plain.session = null; plain.canvas = keepPlainCanvas; }
     if (arrive && arrive !== __t.BX.active) __t.bxTabSelect(arrive);
     __t.BXACCT.user = keepAcct.user;
     __t.BXACCT.key = keepAcct.key;
