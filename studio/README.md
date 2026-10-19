@@ -72,7 +72,10 @@ sealed record re-opened on every call. A guest's door crosses to a plain
 
 `VITE_BASE_PATH=chat` is what makes the app address itself (and its gateway)
 under the `/chat` prefix; the same-origin gateway default is `/chat/v1`, so no
-other variable is needed. The Turnstile site key is read at runtime from `GET /chat/auth/config`:
+other variable is needed. A build without it **fails on purpose** — the mount
+is part of the build (a bare one used to emit `/assets/…`, which 404s under
+`/chat` and serves a blank page), and the live gate fetches the asset the
+served page names. The Turnstile site key is read at runtime from `GET /chat/auth/config`:
 there is **one key for the bot check** (the app's `.env`, `TURNSTILE_SITE_KEY`)
 and no build-time key, so one build serves any deployment — and a deployment
 that leaves `TURNSTILE_SITE_KEY` empty shows no widget at all (sign-ups then

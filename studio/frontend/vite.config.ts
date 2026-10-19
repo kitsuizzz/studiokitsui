@@ -34,17 +34,32 @@ function mountPath(raw: string | undefined): string {
   return bare ? `/${bare}/` : "/";
 }
 
+/** The mount path a build emits. It is required (see studio/README.md): a
+    bare build used to default to "/", which under nnstudio's /chat mount
+    pointed every asset at /assets/… and served a blank page. */
+function buildBase(mode: string): string {
+  const raw = loadEnv(mode, ".", "VITE_").VITE_BASE_PATH;
+  if (raw == null || !raw.trim()) {
+    throw new Error(
+      'VITE_BASE_PATH is required for a build: "chat" for nnstudio\'s /chat mount, ' +
+      '"/" for a root mount, or "/dev/" behind the dev prefix (see studio/README.md).',
+    );
+  }
+  return mountPath(raw);
+}
+
 export default defineConfig(({ command, mode }) => ({
   plugins: [react()],
   // Served under the /dev/ prefix when the dev server (and preview) runs, so
   // every URL the browser requests — page, modules, HMR websocket, and the
   // app's own /dev/v1 + /dev/auth calls — stays inside the prefix Caddy
-  // routes to this server. Builds take their mount from VITE_BASE_PATH: "/"
-  // by default (the docker image serves the app at / on its own origin), or
-  // "/dev/" for the chat.kitsui.co/dev mount. (vite preview inherits the dev prefix.)
+  // routes to this server. Builds take their mount from VITE_BASE_PATH —
+  // "/" (the docker image serves the app at its own origin), "chat" (this
+  // repo's server, at /chat), or "/dev/" for the chat.kitsui.co/dev mount.
+  // (vite preview inherits the dev prefix.)
   base:
     command === "build"
-      ? mountPath(loadEnv(mode, ".", "VITE_").VITE_BASE_PATH)
+      ? buildBase(mode)
       : "/dev/",
   server: {
     host: true,

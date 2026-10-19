@@ -100,8 +100,15 @@ if [ "${1:-}" = "--live" ]; then
   case "$G$M" in *'"cuda"'*'"models"'*) ok;; *) bad;; esac
 
   step "live chat half (the SPA)"
-  C=$(curl -s -m 10 localhost:8124/chat | head -c 40)
-  case "$C" in *"<html"*) ok;; *) bad;; esac
+  C=$(curl -s -m 10 localhost:8124/chat)
+  A=$(printf '%s' "$C" | grep -o '/chat/assets/[^"]*\.js' | head -1)
+  CODE=""
+  [ -n "$A" ] && CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124$A")
+  if printf '%s' "$C" | grep -q '<html' && [ "$CODE" = "200" ]; then
+    ok
+  else
+    bad; echo "    assets=${A:-none} status=${CODE:-none} (a build without VITE_BASE_PATH=chat emits /assets/… and serves blank — see studio/README.md)"
+  fi
 
   step "live landing (the door and /studio)"
   D=$(curl -s -m 10 localhost:8124/ | grep -c "bxAtDoor")
