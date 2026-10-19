@@ -10623,9 +10623,13 @@ function bxCanvasSaveActive() {                 // best-effort: seal the canvas 
 function bxChatGo() {                           // the head's door to the chat half
   const p = bxProject();
   if (!p) return;
-  // a bound canvas lands in its conversation, every other one (the AI
-  // agent's included) in the chat half itself
-  const dest = p.session != null ? "/chat?conversation=" + p.session : "/chat";
+  // The door marks the crossing (`door=studio`): the chat half reads it as
+  // "open a session, never the landing page". A bound canvas names its
+  // conversation too; every other one (the AI agent's included) lets the
+  // chat half pick up where the account left off.
+  const dest = p.session != null
+    ? "/chat?conversation=" + p.session + "&door=studio"
+    : "/chat?door=studio";
   const go = () => {
     if (typeof location === "undefined") return;
     if (location.replace) location.replace(dest); else location.href = dest;

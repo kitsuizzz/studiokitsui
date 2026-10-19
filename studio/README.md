@@ -19,12 +19,16 @@ and a send that goes ahead anyway bounces back in the wall with the same note,
 in red. An account skips the welcome —
 its `place` record (the one unsealed record in its store, written by whichever
 half is opened) routes the arrival to the half it left off in. The canvas
-half's **Chat →** door is the welcome's one exception: its URL names the
-conversation to open, and that outranks the holds — a guest's own
-conversation, or a signed-in account's (even one still on its no-model setup
-screen), lands in the thread it names; the lock is the one thing it does not
-outrank — while the store is locked the unlock screen shows, and the door
-re-runs once the key is back. The halves
+half's **Chat →** door is the welcome's one exception: it marks the crossing
+(`door=studio`) and names the conversation when the canvas has one, and that
+outranks the holds — a guest's own conversation, or a signed-in account's
+(even one still on its no-model setup screen), lands in the thread it names;
+a crossing with no conversation to open (or with one this store no longer
+has) opens a session instead — the account's last conversation, or a fresh
+one, never the welcome. The mark is consumed on arrival, so a reload is a
+plain visit. The lock is the one thing the door does not outrank — while the
+store is locked the unlock screen shows, and the door re-runs once the key is
+back. The halves
 carry no cross-navigation of their own — no switch in a top bar: `/chat` and
 `/studio` are their addresses, and the door is what moves between them. The
 one place a conversation reaches the canvas is its own **Studio** door (see

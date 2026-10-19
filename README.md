@@ -38,9 +38,11 @@ the AAD its record is sealed with, `canvas|<id>`) and appends the canvas's
 tab to the shared open-tabs record (`session|current`); later clicks just
 cross. On the canvas side the door's parameter opens that canvas as a tab,
 the saves keep the binding, and the head's **Chat →** door carries the
-conversation back — the door stands on every canvas, and one without a
-conversation of its own (the AI canvas included) just crosses to the chat
-half. A pre-v2 store that still carries the open-tabs record under the bare
+conversation back — the door stands on every canvas: one with a
+conversation of its own opens it, every other (the AI canvas included)
+opens a session where the account left off (a signed-in account's last
+conversation, a guest's fresh one), so a switch out of Studio never lands
+on the chat half's landing page. A pre-v2 store that still carries the open-tabs record under the bare
 key `current` is folded into `session|current` at first boot, the legacy
 tabs first, so a link made in the chat meanwhile never shadows them. The
 binding also rides in the canvas record's `session` field — the

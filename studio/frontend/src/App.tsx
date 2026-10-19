@@ -1395,28 +1395,54 @@ export default function App() {
     setSidebarOpen(false);
   }, [conversations, streamingId, openConversation]);
 
-  // Arrivals route by intent. A ?conversation= in the URL (the canvas
-  // half's "Chat →" door) names the session the user asked for, and it
-  // outranks the welcome's holds below: a guest's own conversation is
-  // still theirs to land in, and a signed-in account arriving through the
-  // door is not parked on the setup screen with a destination in the URL.
-  // The lock is the one thing it does not outrank — while the store is
+  // Arrivals route by intent. The canvas half's "Chat →" door marks its
+  // crossing (`door=studio`) and names the conversation when the canvas
+  // belongs to one (`?conversation=`). A door arrival never shows the
+  // welcome: the named conversation opens when this store has it, and
+  // otherwise the arrival is a session — the account's last conversation,
+  // or a fresh one, guests included (their session lives for this page
+  // load). The door's parameters are one-shot: they are consumed once the
+  // destination is chosen, so a reload of the tab is a plain arrival. The
+  // lock is the one thing the door does not outrank — while the store is
   // locked the unlock screen shows (the named conversation may sit in the
   // local claim fallback, but the render gives the wall priority over the
   // lock, so opening it would bypass the screen), and the door re-runs
-  // once the key is back. Without the parameter, a signed-in user lands
-  // back where they left: reopen the conversation they were last in (the
-  // encrypted `last` pointer), or start a fresh chat when there is none;
-  // guests keep the greeting. Two guards keep a just-signed-in user in
-  // the greeting: no guest cookie yet (they haven't set up a provider) or
-  // onboarding completed this session (they're on the ready screen about
-  // to send).
+  // once the key is back. A plain arrival keeps the old routing: a
+  // signed-in user lands back where they left (the encrypted `last`
+  // pointer, or a fresh chat when there is none); guests keep the
+  // greeting. Two guards keep a just-signed-in user in the greeting: no
+  // guest cookie yet (they haven't set up a provider) or onboarding
+  // completed this session (they're on the ready screen about to send).
   useEffect(() => {
     if (!loaded) return;
     if (activeId == null && activeStudioId == null && !needsUnlock) {
-      const wanted = Number(new URLSearchParams(window.location.search).get("conversation"));
+      const params = new URLSearchParams(window.location.search);
+      const wanted = Number(params.get("conversation"));
+      const door = params.get("door") === "studio";
+      const route = (id: number | null) => {
+        if (door) {
+          // The crossing is one-shot: consume it, so a reload is a plain
+          // arrival (the welcome, or the account's last conversation).
+          params.delete("conversation");
+          params.delete("door");
+          const query = params.toString();
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + (query ? "?" + query : "") + window.location.hash,
+          );
+        }
+        if (id != null) openConversation(id);
+        else newSession();
+      };
       if (wanted && conversations.some((c) => c.id === wanted)) {
-        openConversation(wanted);
+        route(wanted);
+        return;
+      }
+      if (door && accountState !== "loading") {
+        const last = lastRef.current;
+        const back = accountState === "user" && last != null && conversations.some((c) => c.id === last);
+        route(back && last != null ? last : null);
         return;
       }
     }

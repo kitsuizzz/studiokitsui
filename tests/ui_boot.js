@@ -6521,7 +6521,7 @@ checkAsync("the door: guests to the landing page, accounts to their place", asyn
   else global.fetch = keepFetch;
 });
 
-checkAsync("the head's door to the chat half: it stands on every canvas, and a bound one lands in its conversation", async () => {
+checkAsync("the head's door to the chat half: it stands on every canvas, marks every crossing, and a bound one names its conversation", async () => {
   const turn = () => new Promise(r => setImmediate(r));
   const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
   const keepLoc = global.location;
@@ -6537,7 +6537,8 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and a b
   let plain = null;
   try {
     // a canvas that belongs to no conversation: the door stands, and it
-    // goes to the chat half itself
+    // crosses with the mark that tells the chat half "a session, not the
+    // landing"
     plain = (__t.BX.projects || []).filter(x => x.kind !== "ai").pop() || __t.bxTabNew();
     if (plain.id !== __t.BX.active) __t.bxTabSelect(plain.id);
     plain.session = null;
@@ -6546,8 +6547,8 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and a b
     eql(getEl("bxtChat").title, "to the chat half", "\u2026and it names the half, not a conversation");
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat", "\u2026and it goes to the chat half itself");
-    // the same canvas, bound to a conversation: the door lands in it
+    eql(global.location.replaced, "/chat?door=studio", "\u2026and it crosses with the door's mark");
+    // the same canvas, bound to a conversation: the door names it
     plain.session = "77";
     __t.bxHeadRefresh();
     eql(getEl("bxtChat").title, "back to the chat conversation this canvas belongs to",
@@ -6555,7 +6556,7 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and a b
     global.location.replaced = "";
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat?conversation=77", "\u2026and it lands in that conversation");
+    eql(global.location.replaced, "/chat?conversation=77&door=studio", "\u2026and it names that conversation for the crossing");
     // the AI agent's canvas is a conversation of its own — the door stands
     // there too
     (__t.BX.projects || []).find(x => x.kind === "ai") || __t.bxTabNewAI();
@@ -6565,7 +6566,7 @@ checkAsync("the head's door to the chat half: it stands on every canvas, and a b
     global.location.replaced = "";
     __t.bxChatGo();
     await flush();
-    eql(global.location.replaced, "/chat", "\u2026and from there, too, it goes to the chat half itself");
+    eql(global.location.replaced, "/chat?door=studio", "\u2026and from there, too, it crosses with the mark");
     // the canvas is still where it was when the user comes back
     __t.bxTabSelect(plain.id);
     await flush();
