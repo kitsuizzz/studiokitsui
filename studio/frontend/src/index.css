@@ -418,16 +418,6 @@ img {
   cursor: default;
 }
 
-.landing-switch {
-  position: absolute;
-  top: 0;
-  right: var(--wall-pad);
-  height: var(--head-h);
-  display: flex;
-  align-items: center;
-  z-index: 5;
-}
-
 /* ---------- Shared primitives ---------- */
 
 .dot {

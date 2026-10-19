@@ -1616,6 +1616,7 @@ export default function App() {
       settings: () => setShowSettings(true),
       auth: (mode: "signin" | "signup") => setAuthMode(mode),
       active: () => activeId,
+      head: () => active != null && activeStudioId == null,
       state: () => accountState,
       locked: () => needsUnlock,
       landing: () => atLanding,
@@ -1642,7 +1643,7 @@ export default function App() {
     return () => {
       if ((window as any).__nnChat === api) delete (window as any).__nnChat;
     };
-  }, [loaded, accountState, activeId, conversations, openConversation, newSession,
+  }, [loaded, accountState, activeId, activeStudioId, conversations, openConversation, newSession,
       needsUnlock, atLanding, attachToCanvas, newStudioSession, studioFor]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
@@ -3498,9 +3499,7 @@ export default function App() {
               </div>
             </main>
           ) : atLanding ? (
-            <>
-              {halfSwitch && <div className="landing-switch">{halfSwitch}</div>}
-              <GreetingFrame
+            <GreetingFrame
               onNewSession={() => {
                 newSession();
                 // No model to talk to: warn on the way in. A send that goes
@@ -3520,7 +3519,6 @@ export default function App() {
                 sendBlocker,
               }}
             />
-            </>
           ) : (
             // The session is still resolving (a slow /auth/me, a pending
             // unlock). Never render nothing — a blank frame reads as "the UI

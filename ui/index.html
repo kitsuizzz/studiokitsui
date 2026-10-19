@@ -1106,6 +1106,7 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   .bxhalves button:hover { color: var(--s-text); }
   .bxhalves button.on { background: var(--s-text); color: var(--s-wall); }
   .bxuser { display: flex; align-items: center; gap: 6px; }
+  .bxtop-halves { margin-right: 2px; }
   .bxtgear { display: grid; place-items: center; width: 28px; height: 28px;
              border-radius: 999px; color: var(--s-label); cursor: pointer;
              transition: background-color .15s, color .15s; }
@@ -1534,6 +1535,11 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
     <!-- /brand:logo -->
   </a>
   <div class="bxuser" id="bxuser" hidden>
+    <span class="bxhalves bxtop-halves" id="bxhalfTop" role="group"
+          aria-label="chat / studio" hidden>
+      <button type="button" class="on" aria-pressed="true" id="bxtTopChat">Chat</button>
+      <button type="button" aria-pressed="false" id="bxtTopStudio">Studio</button>
+    </span>
     <span class="bxtgear" id="bxtSettings" title="settings — models, providers, agents">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -9527,7 +9533,7 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
 // The sidebar lists one set of sessions for both views: an open canvas, the
 // conversation bound to it, or a chat-only session.
 const BXVIEW = { half: "studio" };
-const BXCHAT = { loading: null, ready: false, convs: [], sig: "", landing: false, known: false };
+const BXCHAT = { loading: null, ready: false, convs: [], sig: "", landing: false, known: false, head: false };
 function bxViewIsChat() { return BXVIEW.half === "chat"; }
 // Every /chat address (the page, its slash, a fallback deep path) is the chat
 // main; /studio and / are the canvas. The built standalone page at
@@ -9543,6 +9549,14 @@ function bxBareCanvas(id) { return String(id == null ? "" : id).replace(/^canvas
 // The chat half's welcome is full-bleed under the one top bar: while it is the
 // main, the left menu steps aside (it returns with the first session). Until
 // the embedded app reports (a cold /chat load), stay in the landing's shape.
+// The half switch lives in the head (next to Chat Kitsui) when there is one;
+// on the welcome, the lock screen, or while the chat boots there is no head,
+// so the top bar carries the same switch instead.
+function bxChatChrome() {
+  const el = $("bxhalfTop");
+  if (!el) return;
+  el.hidden = !(bxViewIsChat() && !BXCHAT.head);
+}
 function bxLandingApply() {
   const landing = bxViewIsChat() && (BXCHAT.landing || !BXCHAT.known);
   try { document.documentElement.classList.toggle("at-landing", landing); } catch (e) {}
@@ -9569,6 +9583,7 @@ function bxViewSet(half) {
     document.title = BXVIEW.half === "chat" ? "Studio Kitsui — Chat" : "Studio Kitsui — Studio";
   } catch (e) {}
   if (BXACCT && BXACCT.user) bxPlaceNow(BXVIEW.half);
+  bxChatChrome();
   bxLandingApply();
   bxTabsRender();
 }
@@ -9781,6 +9796,7 @@ function bxShellInit() {
     document.documentElement.classList.toggle("at-chat", BXVIEW.half === "chat");
     document.title = BXVIEW.half === "chat" ? "Studio Kitsui — Chat" : "Studio Kitsui — Studio";
   } catch (e) {}
+  bxChatChrome();                              // the switch waits in the top bar until a head exists
   bxLandingApply();                            // the menu waits for the app's report on /chat
   bxTabsRender();
   bxChatEnsure();                              // the session list lives in every view
@@ -9809,8 +9825,10 @@ function bxShellInit() {
     if (ready) {
       BXCHAT.known = true;
       BXCHAT.landing = !!(api.landing && api.landing());
+      BXCHAT.head = !!(api.head && api.head());
       bxLandingApply();
     }
+    bxChatChrome();
     if (ready && BXACCT.known &&
         ((st === "user" && !BXACCT.user) || (st === "guest" && BXACCT.user) ||
          (st === "user" && BXACCT.locked && !locked))) {
@@ -11258,6 +11276,7 @@ function bxtInit() {
   wire("bxsCollapse", bxsToggle);              // the sidebar folds, and the choice is remembered
   wire("bxtHalfChat", () => { if (!bxViewIsChat()) bxChatGo(); });
   wire("bxtHalfStudio", () => { if (bxViewIsChat()) bxChatStudio(); });
+  wire("bxtTopStudio", () => { if (bxViewIsChat()) bxChatStudio(); });
   wire("bxrSearch", () => bxSwitchToggle());   // the search door: the switcher
   if (typeof navigator !== "undefined" &&
       !/Mac|iPhone|iPad/.test(String(navigator.platform || ""))) {
