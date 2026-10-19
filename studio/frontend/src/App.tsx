@@ -762,8 +762,70 @@ export default function App() {
     // canvas whose record the canvas side lost (or never wrote, when the link
     // was made while the store was unreachable) is re-linked here, so a
     // session never points into a void.
+    // The canvas record's `session` is the other half of the binding — and
+    // the one that survives when the conversation's canvasId save is lost.
+    // Open the canvases once, by their session.
+    const canvasBySession = new Map<string, { id: string; name: string }>();
+    const canvasByName = new Map<string, { id: string; name: string; design: unknown; rowId: string }>();
+    for (const row of store.canvases) {
+      const bare = String(row.id || "").replace(/^canvas\|/, "");
+      const rec = bare ? await openCanvasBlob(key, bare, row.blob) : null;
+      if (!rec) continue;
+      if (rec.session != null) {
+        if (!canvasBySession.has(String(rec.session))) {
+          canvasBySession.set(String(rec.session), { id: bare, name: rec.name });
+        }
+      } else if (rec.name && !canvasByName.has(rec.name)) {
+        // An unbound canvas with a name to itself: if a conversation carries
+        // that name, it is the pair whose binding never landed.
+        canvasByName.set(rec.name, { id: bare, name: rec.name, design: rec.design, rowId: String(row.id) });
+      }
+    }
+    const hasCanvasRow = (id: string) => store.canvases.some(
+      (r) => r.id === "canvas|" + id || r.id === String(id),
+    );
     for (const conv of loadedConversations) {
-      if (!conv.canvasId) continue;
+      const orphan = canvasBySession.get(String(conv.id));
+      // The conversation's canvasId points at nothing, but a canvas names the
+      // conversation as its session: adopt the real canvas (its design stays).
+      if (conv.canvasId && !hasCanvasRow(conv.canvasId) && orphan) {
+        conv.canvasId = orphan.id;
+        canvasLinkedRef.current.add(orphan.id);
+        canvasNamesRef.current.set(orphan.id, orphan.name);
+        continue;
+      }
+      if (!conv.canvasId || !hasCanvasRow(conv.canvasId)) {
+        if (orphan) {
+          conv.canvasId = orphan.id;
+          canvasLinkedRef.current.add(orphan.id);
+          canvasNamesRef.current.set(orphan.id, orphan.name);
+          continue;
+        }
+        // No canvas names this conversation yet; an unbound canvas with the
+        // conversation's name is the pair (the chat made the canvas first).
+        const named = conv.title ? canvasByName.get(conv.title) : null;
+        if (named) {
+          canvasByName.delete(named.name);   // one canvas, one conversation
+          conv.canvasId = named.id;
+          canvasLinkedRef.current.add(named.id);
+          canvasNamesRef.current.set(named.id, named.name);
+          try {
+            const aad = "canvas|" + named.id;
+            const blob = await encryptJson(
+              key,
+              { name: named.name, design: named.design, session: String(conv.id) },
+              aad,
+            );
+            await syncStore({ canvases: {
+              upserts: [{ id: aad, blob }],
+              deletes: named.rowId !== aad ? [named.rowId] : [] } });
+          } catch {
+            // the display still pairs them; the next boot retries the bind
+          }
+          continue;
+        }
+        if (!conv.canvasId) continue;
+      }
       // The canvas half's own rows are bare ids; the chat half's are
       // `canvas|<id>`. Both are the same canvas.
       const row = store.canvases.find(

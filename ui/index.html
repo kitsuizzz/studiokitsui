@@ -9851,11 +9851,41 @@ function bxTabsRender() {                      // the one session list, shared b
   if (!list) return;
   list.innerHTML = "";
   const convs = BXCHAT.convs || [];
+  const byId = new Map(convs.map(c => [c.id, c]));
   const byCanvas = new Map();
   for (const c of convs) if (c.canvasId) {
     const bare = bxBareCanvas(c.canvasId);
     byCanvas.set(bare, c);
     byCanvas.set("canvas|" + bare, c);
+  }
+  // A session pairs by the conversation's canvasId, and just as firmly by the
+  // canvas record's `session` (the link's copy) when the conversation's own
+  // save was lost. Each conversation is claimed once; the canvas id wins.
+  const projectConv = new Map();
+  const usedConv = new Set();
+  for (const p of BX.projects || []) {
+    const c = p.canvas ? byCanvas.get(String(p.canvas)) : null;
+    if (c) { projectConv.set(p.id, c); usedConv.add(c.id); }
+  }
+  for (const p of BX.projects || []) {
+    if (projectConv.has(p.id) || p.session == null) continue;
+    const c = byId.get(Number(p.session));
+    if (c && !usedConv.has(c.id)) { projectConv.set(p.id, c); usedConv.add(c.id); }
+  }
+  // Last resort: a saved canvas and a chat-only session can carry the same
+  // title when the binding never landed (both sides were created before the
+  // pair did). A meaningful title names one session, not two.
+  for (const p of BX.projects || []) {
+    if (projectConv.has(p.id)) continue;
+    const title = String(p.name || "").trim();
+    if (!title || title === "New session" || /^New Project \d+$/.test(title)) continue;
+    const c = convs.find(x => !usedConv.has(x.id) && String(x.title || "").trim() === title);
+    if (!c) continue;
+    projectConv.set(p.id, c);
+    usedConv.add(c.id);
+    // Give the canvas record the session id, so the chat half's heal can
+    // adopt it back onto the conversation (the design is untouched).
+    if (!p.session && p.canvas && c.canvasId == null) void bxCanvasBindSession(p, c.id);
   }
   const openCanvas = new Set();
   for (const p of BX.projects || []) if (p.canvas) openCanvas.add(bxBareCanvas(p.canvas));
@@ -9886,7 +9916,7 @@ function bxTabsRender() {                      // the one session list, shared b
   // The open canvases, in tab order. A bound one wears the chat's title, so
   // both halves name the same session the same way.
   for (const p of BX.projects || []) {
-    const conv = p.canvas ? byCanvas.get(String(p.canvas)) : null;
+    const conv = projectConv.get(p.id) || null;
     row({
       name: conv ? (conv.title || p.name) : p.name,
       ai: p.kind === "ai",
@@ -9905,7 +9935,8 @@ function bxTabsRender() {                      // the one session list, shared b
     });
   }
   // chat sessions with no open canvas: recent first, as the chat lists them
-  const rest = convs.filter(c => !c.canvasId || !openCanvas.has(bxBareCanvas(c.canvasId)))
+  const rest = convs.filter(c => !usedConv.has(c.id) &&
+    (!c.canvasId || !openCanvas.has(bxBareCanvas(c.canvasId))))
     .sort((a, b) => (b.createdAt ?? b.id) - (a.createdAt ?? a.id) || b.id - a.id);
   for (const c of rest) {
     row({
