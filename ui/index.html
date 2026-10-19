@@ -9220,8 +9220,17 @@ let BXCANVAS_WANT = "";
 try { BXCANVAS_WANT = (new URLSearchParams(location.search || "").get("canvas")) || ""; } catch (e) {}
 
 function bxSessionNow() {
-  const tabs = (BX.projects || []).filter(p => p.saved && p.canvas)
-                .map(p => ({ id: p.canvas, name: p.name }));
+  // One tab per canvas, whichever id shape the projects carry (an older
+  // build could leave two tabs for one canvas; the record must not keep them).
+  const seen = new Set();
+  const tabs = [];
+  for (const p of BX.projects || []) {
+    if (!p.saved || !p.canvas) continue;
+    const bare = bxBareCanvas(p.canvas);
+    if (seen.has(bare)) continue;
+    seen.add(bare);
+    tabs.push({ id: p.canvas, name: p.name });
+  }
   const act = bxProject();
   return { tabs: tabs,
            active: act && act.saved && act.canvas ? act.canvas : null };
@@ -9280,11 +9289,14 @@ async function bxSessionStored() {             // the sealed session, or null. T
 }
 function bxSessionMatch(sn, rows) {            // the session's tabs, still saved
   const out = [];
+  const seen = new Set();
   for (const t of (sn && sn.tabs) || []) {
     // Tab ids arrive in two shapes: a row's own (the canvas's tabs) or the
     // chat half's bare one — "canvas|" + bare is the same row in the store.
     const hit = (rows || []).find(r => r.id === t.id || r.id === "canvas|" + t.id);
-    if (hit) out.push(hit);
+    if (!hit || seen.has(bxBareCanvas(hit.id))) continue;   // one tab per canvas
+    seen.add(bxBareCanvas(hit.id));
+    out.push(hit);
   }
   return out;
 }
@@ -9776,7 +9788,9 @@ function bxStudioTab(p) {
 async function bxOpenCanvasId(id) {
   const want = String(id || "");
   if (!want) return false;
-  const open = (BX.projects || []).find(p => p.canvas && String(p.canvas) === want);
+  // The chat half passes the bare canvas id; an open tab carries the row id
+  // (`canvas|<id>`). They are the same canvas — never open a second tab.
+  const open = (BX.projects || []).find(p => p.canvas && bxBareCanvas(p.canvas) === bxBareCanvas(want));
   if (open) { bxTabSelect(open.id); return true; }
   if (!BXACCT.user || !BXACCT.key) return false;
   let rows = [];
