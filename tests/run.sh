@@ -99,6 +99,11 @@ if [ "${1:-}" = "--live" ]; then
   M=$(curl -s -m 10 localhost:8124/api/models | head -c 80)
   case "$G$M" in *'"cuda"'*'"models"'*) ok;; *) bad;; esac
 
+  step "live guest (no cookies)"
+  C=$(curl -s -D - -o /dev/null -m 10 localhost:8124/chat/auth/config | tr -d '\r' | grep -ci '^set-cookie:')
+  S=$(curl -s -D - -o /dev/null -m 10 localhost:8124/chat | tr -d '\r' | grep -ci '^set-cookie:')
+  if [ "$C" = "0" ] && [ "$S" = "0" ]; then ok; else bad; echo "    config=$C page=$S"; fi
+
   step "live chat half (the SPA)"
   C=$(curl -s -m 10 localhost:8124/chat)
   M=$(curl -s -m 10 localhost:8124/chat/.vite/manifest.json)

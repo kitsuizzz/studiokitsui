@@ -1572,7 +1572,9 @@ check("the Backend menu: Local and Remote drop down into their instructions", ()
   pane = m.children.find(c => c.className === "bxbpane");
   ok(pane && hint().indexOf("Modal token") >= 0, "Remote drops down instead");
   eql(pane.querySelectorAll(".bxbin")[0].type, "password", "…with the key as a password field");
-  // the choice is made inside the pane and remembered; the header wears the dot
+  // the choice is made inside the pane and remembered (for an account; a
+  // guest keeps nothing); the header wears the dot
+  localStorage.setItem("nnstudio_account", "1");
   pane.querySelectorAll(".chip").find(c => c.textContent === "use modal").click();
   eql(globalThis.localStorage.getItem("nnstudio_backend"), "remote", "use modal remembers it");
   eql(heads()[1].querySelectorAll(".bxton").length, 1, "…and the section wears the in-use dot");
@@ -1580,6 +1582,7 @@ check("the Backend menu: Local and Remote drop down into their instructions", ()
   pane = m.children.find(c => c.className === "bxbpane");
   pane.querySelectorAll(".chip").find(c => c.textContent === "use this computer").click();
   eql(globalThis.localStorage.getItem("nnstudio_backend"), "local", "…and back to this computer");
+  localStorage.removeItem("nnstudio_account");
   __t.bxtBackendToggle();
   ok(m.hidden, "…and it closes");
 });
@@ -4999,14 +5002,16 @@ check("the shell: the sidebar, the head \u2014 the chat half's composition", () 
   ok(__t.bxTalkOn(), "the sidebar's agent opens the conversation");
   getEl("bxrCanvas").click();                   // \u2026and the canvas comes back
   ok(!__t.bxTalkOn(), "the sidebar's canvas brings the canvas back: " + __t.bxProject().name);
-  // the fold collapses the sidebar, and the choice is remembered
+  // the fold collapses the sidebar, and the choice is remembered (accounts)
   ok(!getEl("bxsidebar").classList.contains("collapsed"), "the sidebar starts open");
+  localStorage.setItem("nnstudio_account", "1");
   __t.bxsToggle();
   ok(getEl("bxsidebar").classList.contains("collapsed"), "the fold closes it");
   eql(localStorage.getItem("nnstudio_sidebar"), "1", "\u2026and remembers it");
   __t.bxsToggle();
   ok(!getEl("bxsidebar").classList.contains("collapsed"), "and opens it again");
   eql(localStorage.getItem("nnstudio_sidebar"), "0", "\u2026and forgets the fold");
+  localStorage.removeItem("nnstudio_account");
 });
 
 check("the sidebar's own order, and the menus that anchor through the head", () => {

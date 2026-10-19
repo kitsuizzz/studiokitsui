@@ -21,6 +21,7 @@ import { defaultChoice, effectiveChoice, providerFor } from "./lib/modelchoice";
 import { CHAT_KITSUI_ID, chatKitsui, effectiveAgent, ensureChatKitsui, normalizeAgent, openAgentsRecord, pointChatKitsui, sealAgentsRecord, type AgentOption } from "./lib/agents";
 import {
   clearLocalData,
+  clearGuestData,
   loadAppOverrides,
   loadConversations,
   loadStudios,
@@ -109,6 +110,8 @@ const defaultSettings: Settings = {
 };
 
 function loadSettings(): Settings {
+  // A guest's browser keeps nothing: the settings start at their defaults.
+  if (!sessionHint()) return defaultSettings;
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
@@ -247,6 +250,8 @@ function seedWorkspace(legacy: LegacySettings | null): Workspace {
 }
 
 function loadWorkspace(): Workspace {
+  // A guest's browser keeps nothing: no stored workspace, no legacy settings.
+  if (!sessionHint()) return seedWorkspace(null);
   try {
     const raw = localStorage.getItem(WORKSPACE_KEY);
     if (raw) {
@@ -509,6 +514,7 @@ export default function App() {
   const [modelWarning, setModelWarning] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
+      if (!sessionHint()) return false;
       return localStorage.getItem(SIDEBAR_KEY) === "1";
     } catch {
       return false;
@@ -580,11 +586,11 @@ export default function App() {
   }, [activeId]);
 
   useEffect(() => {
+    if (!sessionHint()) return;               // a guest keeps nothing
     try {
-      // A guest's providers are session-only: the stored copy never carries
-      // them (or their keys), so a reload comes back clean. A signed-in
-      // account's providers come back from the server profile instead.
-      const persisted = sessionHint() ? workspace : guestSafeWorkspace(workspace);
+      // A signed-in account's providers come back from the server profile;
+      // the local copy follows, minus anything not yet claimed.
+      const persisted = workspace;
       localStorage.setItem(WORKSPACE_KEY, JSON.stringify(persisted));
     } catch {
       // storage unavailable
@@ -592,6 +598,7 @@ export default function App() {
   }, [workspace]);
 
   useEffect(() => {
+    if (!sessionHint()) return;               // a guest keeps nothing
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {
@@ -808,10 +815,22 @@ export default function App() {
     const signedIn = sessionHint();
     // A guest's providers are session-only; purge the legacy cookie so an old
     // build's write can never resurrect one.
-    if (!signedIn) clearGuestSession();
+    if (!signedIn) {
+      clearGuestSession();
+      // A guest's browser keeps nothing: drop what an earlier session left,
+      // in storage and in the local store (conversations, studios, overrides).
+      try {
+        for (const k of [WORKSPACE_KEY, SETTINGS_KEY, SIDEBAR_KEY, THEME_KEY]) {
+          localStorage.removeItem(k);
+        }
+      } catch {
+        // storage unavailable
+      }
+      void clearGuestData();
+    }
     void (async () => {
       try {
-        const overrides = await loadAppOverrides();
+        const overrides = signedIn ? await loadAppOverrides() : null;
         if (cancelled) return;
         if (overrides) setAppOverrides(overrides);
         const loadLocal = async () => {
@@ -819,8 +838,9 @@ export default function App() {
           return { conversations: recoverConversations(list ?? []), studios: studioList ?? [] };
         };
         if (!signedIn) {
-          // Guest: conversations are never persisted — they live in memory for
-          // this session only, so a reload starts clean. With no usable BYOK
+          // Guest: nothing is persisted — conversations, studios, overrides,
+          // settings, theme and fold are in memory (or cleared above) for this
+          // session only, so a reload starts clean. With no usable BYOK
           // provider on this browser, the server-provided platform model is
           // adopted (no provider form).
           adopt([], []);
@@ -1048,7 +1068,7 @@ export default function App() {
   // Overrides are always saved once loaded (even down to an empty map), so a
   // discarded edit survives a reload instead of resurrecting the old override.
   useEffect(() => {
-    if (!loaded) return;
+    if (!loaded || !sessionHint()) return;    // a guest keeps nothing
     const t = setTimeout(() => void saveAppOverrides(appOverrides), SAVE_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [appOverrides, loaded]);
@@ -1225,7 +1245,7 @@ export default function App() {
       themeFlipTimer.current = null;
     }, THEME_FLIP_MS + 50);
     try {
-      localStorage.setItem(THEME_KEY, next);
+      if (sessionHint()) localStorage.setItem(THEME_KEY, next);
     } catch {
       // storage unavailable
     }
@@ -1403,7 +1423,7 @@ export default function App() {
     setSidebarCollapsed((prev) => {
       const next = !prev;
       try {
-        localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
+        if (sessionHint()) localStorage.setItem(SIDEBAR_KEY, next ? "1" : "0");
       } catch {
         // storage unavailable
       }

@@ -1639,20 +1639,34 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
 <script>
 const $ = id => document.getElementById(id);
 
+// v2 · A guest's browser keeps nothing: no session cookie, and no stored
+// workspace, settings, theme, fold, or backend key. Clear what an earlier
+// session left behind; only a live account keeps its preferences.
+let bxHint = false;
+try { bxHint = localStorage.getItem("nnstudio_account") === "1"; } catch (e) {}
+if (!bxHint) {
+  try {
+    for (const k of ["nnstudio_theme", "aistudio.theme", "nnstudio_sidebar",
+                     "nnstudio_backend", "nnstudio_modal_key", "nnstudio_canvas_name",
+                     "aistudio.settings", "aistudio.sidebarCollapsed", "aistudio.workspace"])
+      localStorage.removeItem(k);
+  } catch (e) {}
+}
+
 // v2 · the remembered theme lands before anything draws (Salon dark is home)
 // The one shell owns the theme for both halves; the chat's old key is read
 // once, so a theme chosen over there still lands here.
 try {
-  let th = localStorage.getItem("nnstudio_theme");
-  if (th !== "light" && th !== "dark") th = localStorage.getItem("aistudio.theme");
+  let th = bxHint ? localStorage.getItem("nnstudio_theme") : null;
+  if (bxHint && th !== "light" && th !== "dark") th = localStorage.getItem("aistudio.theme");
   document.documentElement.setAttribute("data-theme", th === "light" ? "light" : "dark");
 } catch (e) {
   document.documentElement.setAttribute("data-theme", "dark");
 }
 
-// v2 · the remembered sidebar state lands before anything draws
+// v2 · the remembered sidebar state lands before anything draws (accounts)
 try {
-  if (localStorage.getItem("nnstudio_sidebar") === "1") {
+  if (bxHint && localStorage.getItem("nnstudio_sidebar") === "1") {
     const s = document.getElementById("bxsidebar");
     if (s && s.classList) s.classList.add("collapsed");
   }
@@ -9090,7 +9104,7 @@ async function bxAccountSave(name, design, status, go, onSaved, bound) {
         upserts: [{ id: rowId, blob: blob }],
         deletes: id !== rowId ? [id] : [] } }) });
     if (!r.ok) throw new Error("the server refused (HTTP " + r.status + ")");
-    try { localStorage.setItem("nnstudio_canvas_name", name); } catch (e) {}
+    try { if (bxSessionHint()) localStorage.setItem("nnstudio_canvas_name", name); } catch (e) {}
     if (status) status.textContent = "saved as " + name + " ✓ (sealed)";
     if (go) go.textContent = "close";
     if (onSaved) onSaved(name, id);
@@ -9952,7 +9966,7 @@ function bxsToggle() {                          // the sidebar folds, and the ch
   const s = $("bxsidebar");
   if (!s || !s.classList) return;
   const collapsed = s.classList.toggle("collapsed");
-  try { localStorage.setItem("nnstudio_sidebar", collapsed ? "1" : "0"); } catch (e) {}
+  try { if (bxSessionHint()) localStorage.setItem("nnstudio_sidebar", collapsed ? "1" : "0"); } catch (e) {}
 }
 function bxSwitchBuild() {                      // the switcher's list, in its view
   const list = $("bxswitchList");
@@ -10277,6 +10291,11 @@ function bxTalkSync() {                        // a log/list poll landed: repain
 let BX_BACKEND = { mode: "local", key: "" };
 let bxbOpen = null;                            // which backend section is dropped down
 function bxtBackendLoad() {
+  if (!bxSessionHint()) {                     // a guest keeps nothing
+    BX_BACKEND.mode = "local";
+    BX_BACKEND.key = "";
+    return;
+  }
   try {
     BX_BACKEND.mode = localStorage.getItem("nnstudio_backend") === "remote" ? "remote" : "local";
     BX_BACKEND.key = localStorage.getItem("nnstudio_modal_key") || "";
@@ -10284,7 +10303,7 @@ function bxtBackendLoad() {
 }
 function bxtBackendPick(mode) {
   BX_BACKEND.mode = mode === "remote" ? "remote" : "local";
-  try { localStorage.setItem("nnstudio_backend", BX_BACKEND.mode); } catch (e) {}
+  try { if (bxSessionHint()) localStorage.setItem("nnstudio_backend", BX_BACKEND.mode); } catch (e) {}
   bxtBackendRender();
 }
 function bxtBackendToggle() {
@@ -10361,7 +10380,7 @@ function bxtBackendRender() {
     row.appendChild(key);
     const save = mk("span", { class: "chip tiny", text: "save key" });
     save.addEventListener("click", () => {
-      try { localStorage.setItem("nnstudio_modal_key", BX_BACKEND.key || ""); } catch (e) {}
+      try { if (bxSessionHint()) localStorage.setItem("nnstudio_modal_key", BX_BACKEND.key || ""); } catch (e) {}
       save.textContent = "saved";
     });
     row.appendChild(save);
@@ -11181,7 +11200,7 @@ function bxThemeApply() {                      // the button names the theme it 
 }
 function bxThemeToggle() {
   const next = bxThemeNow() === "light" ? "dark" : "light";
-  try { localStorage.setItem("nnstudio_theme", next); } catch (e) {}
+  try { if (bxSessionHint()) localStorage.setItem("nnstudio_theme", next); } catch (e) {}
   const root = document.documentElement;
   if (root && root.classList) {
     root.classList.add("theme-flip");

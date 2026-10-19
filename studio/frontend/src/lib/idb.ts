@@ -1,8 +1,9 @@
 /**
  * The one IndexedDB the app opens. Two object stores share it:
  *
- * - `kv`    — the guest's conversations / studios / code overrides (and the
- *             signed-in user's, until the first cloud sync claims them).
+ * - `kv`    — the signed-in user's local conversations / studios / code
+ *             overrides until the first cloud sync claims them. A guest's
+ *             copies are cleared at boot and never written.
  * - `keys`  — the account's non-extractable AES-GCM key (see lib/keyvault.ts),
  *             so a reload can decrypt the server-side store without asking
  *             for the access key again.

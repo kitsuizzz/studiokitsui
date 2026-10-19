@@ -35,6 +35,11 @@ off last time, which is the `place` record in its store: on the backend, so it
 follows the account to any device. The halves have their own addresses,
 `/chat` and `/studio` (the canvas never bounces) — the door is the navigation.
 
+A guest's session is **ephemeral**: the app sets no cookie, and nothing the
+guest opens or configures is kept in the browser — no chat or canvas history,
+no providers or agents, no settings, theme, fold, or backend key. A refresh
+starts clean. An account keeps its sealed store (and its preferences) instead.
+
 A **session** is a conversation and the canvas it is bound to — one thing,
 made whole from either side. The **Studio** switch (in the head, next to Chat
 Kitsui) crosses from the chat to its canvas — the first crossing seals it
@@ -95,7 +100,8 @@ straight from `nvidia-smi`), `/api/backend` (who is connected) and
 ## Accounts — one account, both halves
 
 Everyone starts a **guest**: drawing, wiring, running and training all work
-with no account, and nothing of the session is kept on the server. An account
+with no account, and nothing of the session is kept on the server — nor in the
+browser: a guest's work and preferences are gone on the next refresh. An account
 is what the server saves a canvas *for* — and it is the same account in both
 halves: sign in once (Studio's top-right block, or Chat's account menu) and
 both are signed in. Creating one always goes through Cloudflare's bot check
@@ -226,7 +232,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold; the theme) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head's Chat | Studio switch is the pair's crossing — the canvas opens its chat, or gains one — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
+| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold and theme — remembered for an account, fresh for a guest) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head's Chat | Studio switch is the pair's crossing — the canvas opens its chat, or gains one — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |

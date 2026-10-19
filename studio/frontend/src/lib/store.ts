@@ -142,6 +142,29 @@ export async function saveAppOverrides(overrides: AppOverrides): Promise<void> {
 }
 
 /**
+ * Drops everything a guest could leave in this browser: the local conversation
+ * and studio copies and the per-app overrides. Called when the app boots with
+ * no account — a guest's browser keeps nothing across a refresh.
+ */
+export async function clearGuestData(): Promise<void> {
+  try {
+    const db = await openDb();
+    try {
+      const tx = db.transaction(KV_STORE, "readwrite");
+      const store = tx.objectStore(KV_STORE);
+      store.delete(KEY);
+      store.delete(STUDIO_KEY);
+      store.delete(OVERRIDES_KEY);
+      await commit(tx);
+    } finally {
+      db.close();
+    }
+  } catch {
+    // storage unavailable or blocked
+  }
+}
+
+/**
  * Drops the per-browser conversation/studio copies (overrides stay — they are
  * not part of the E2E store). Called once the first sign-in has encrypted and
  * uploaded them, so a later guest session can't resurrect another account's
