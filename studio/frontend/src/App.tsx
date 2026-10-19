@@ -1395,33 +1395,43 @@ export default function App() {
     setSidebarOpen(false);
   }, [conversations, streamingId, openConversation]);
 
-  // A signed-in user lands back where they left: once the session is confirmed
-  // and nothing is active, reopen the conversation they were last in (the
-  // encrypted `last` pointer), or start a fresh chat when there is none.
-  // A ?conversation= in the URL (the canvas half's "Chat →" door) outranks
-  // the pointer: it names the session the user asked for. Guests keep the
-  // greeting. Two guards keep a just-signed-in user in the greeting:
-  // no guest cookie yet (they haven't set up a provider) or onboarding
-  // completed this session (they're on the ready screen about to send).
+  // Arrivals route by intent. A ?conversation= in the URL (the canvas
+  // half's "Chat →" door) names the session the user asked for, and it
+  // outranks the welcome's holds below: a guest's own conversation is
+  // still theirs to land in, and a signed-in account arriving through the
+  // door is not parked on the setup screen with a destination in the URL.
+  // The lock is the one thing it does not outrank — while the store is
+  // locked the unlock screen shows (the named conversation may sit in the
+  // local claim fallback, but the render gives the wall priority over the
+  // lock, so opening it would bypass the screen), and the door re-runs
+  // once the key is back. Without the parameter, a signed-in user lands
+  // back where they left: reopen the conversation they were last in (the
+  // encrypted `last` pointer), or start a fresh chat when there is none;
+  // guests keep the greeting. Two guards keep a just-signed-in user in
+  // the greeting: no guest cookie yet (they haven't set up a provider) or
+  // onboarding completed this session (they're on the ready screen about
+  // to send).
   useEffect(() => {
     if (!loaded) return;
-    // Only signed-in accounts auto-route: they always ride a provider (their
-    // own BYOK or the platform model), so they land in a session. Guests
-    // ALWAYS start on the landing page (the welcome choice) — "Continue as
-    // guest" is what opens a new session for them.
+    if (activeId == null && activeStudioId == null && !needsUnlock) {
+      const wanted = Number(new URLSearchParams(window.location.search).get("conversation"));
+      if (wanted && conversations.some((c) => c.id === wanted)) {
+        openConversation(wanted);
+        return;
+      }
+    }
+    // Only signed-in accounts auto-route the rest: they always ride a
+    // provider (their own BYOK or the platform model), so they land in a
+    // session. Guests ALWAYS start on the landing page (the welcome
+    // choice) — "Continue as guest" is what opens a new session for them.
     if (accountState !== "user") return;
     if (guest == null && platform == null) return;
     if (onboardedThisSessionRef.current) return;
     if (activeId != null || activeStudioId != null) return;
-    const wanted = Number(new URLSearchParams(window.location.search).get("conversation"));
-    if (wanted && conversations.some((c) => c.id === wanted)) {
-      openConversation(wanted);
-      return;
-    }
     const last = lastRef.current;
     if (last != null && conversations.some((c) => c.id === last)) openConversation(last);
     else newSession();
-  }, [loaded, accountState, guest, platform, activeId, activeStudioId, newSession, openConversation, conversations]);
+  }, [loaded, accountState, guest, platform, activeId, activeStudioId, needsUnlock, newSession, openConversation, conversations]);
 
   /** The auth dialog confirmed (sign-in, or a new account was created). The account's providers and agents are adopted immediately (mirroring the on-load path). A fresh account keeps what the guest set up in this tab. */
   const completeAuth = (
