@@ -113,11 +113,13 @@ print((e.get("css") or [""])[0] if e else "")' 2>/dev/null)
   CODE=""; KCODE=""
   [ -n "$A" ] && CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124/chat/$A")
   [ -n "$K" ] && KCODE=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "localhost:8124/chat/$K")
+  R=$(curl -s -D - -o /dev/null -m 10 localhost:8124/chat/index.html | tr -d '\r' \
+      | awk 'tolower($1) == "location:" { print $2 }')
   if printf '%s' "$C" | grep -q 'id="nn-chat"' && printf '%s' "$C" | grep -q 'id="bxsidebar"' \
-     && [ "$CODE" = "200" ] && [ "$KCODE" = "200" ]; then
+     && [ "$CODE" = "200" ] && [ "$KCODE" = "200" ] && [ "$R" = "/chat" ]; then
     ok
   else
-    bad; echo "    shell=$(printf '%s' "$C" | grep -c 'id="nn-chat"') entry=${A:-none}/$CODE css=${K:-none}/$KCODE (a build without VITE_BASE_PATH=chat, or a missing manifest, serves the blank/incomplete page — see studio/README.md)"
+    bad; echo "    shell=$(printf '%s' "$C" | grep -c 'id="nn-chat"') entry=${A:-none}/$CODE css=${K:-none}/$KCODE old-index=${R:-none} (a build without VITE_BASE_PATH=chat, a missing manifest, or the standalone page still reachable — see studio/README.md)"
   fi
 
   step "live landing (the door and /studio)"

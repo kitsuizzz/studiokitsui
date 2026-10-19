@@ -85,7 +85,9 @@ is part of the build (a bare one used to emit `/assets/…`, which 404s under
 entry and stylesheet. The build also emits `.vite/manifest.json`, which the
 one shell page reads at boot; the vite config's postcss pass scopes the app's
 stylesheet to `#nn-chat` (and its theme attribute lives there too), so its
-generic rules never touch the shell around it. The Turnstile site key is read at runtime from `GET /chat/auth/config`:
+generic rules never touch the shell around it. nnstudio's server serves that
+one page at `/chat` and redirects the built `index.html` there; the standalone
+page remains the docker/nginx build. The Turnstile site key is read at runtime from `GET /chat/auth/config`:
 there is **one key for the bot check** (the app's `.env`, `TURNSTILE_SITE_KEY`)
 and no build-time key, so one build serves any deployment — and a deployment
 that leaves `TURNSTILE_SITE_KEY` empty shows no widget at all (sign-ups then

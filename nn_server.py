@@ -730,6 +730,12 @@ class Handler(BaseHTTPRequestHandler):
             # top bar and left menu are the same DOM across a half switch.
             self._studio_file(UI)
             return True
+        if path in ("/chat/index.html", "/chat/index.htm"):
+            # The built standalone page (the docker/nginx build) is not the
+            # app's door here: /chat is the one shared shell. Send the old
+            # address there, so no full-screen, shell-less landing survives.
+            self._send(302, b"", "text/plain; charset=utf-8", {"Location": "/chat"})
+            return True
         if (path.startswith("/chat/v1/") or path.startswith("/chat/auth/")
                 or path == "/chat/healthz"):
             self._studio_gateway(path[len("/chat"):])

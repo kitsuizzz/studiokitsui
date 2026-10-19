@@ -9505,6 +9505,14 @@ function bxTabSave() {                         // Ctrl/Cmd+S, and the saved name
 const BXVIEW = { half: "studio" };
 const BXCHAT = { loading: null, ready: false, convs: [], sig: "" };
 function bxViewIsChat() { return BXVIEW.half === "chat"; }
+// Every /chat address (the page, its slash, a fallback deep path) is the chat
+// main; /studio and / are the canvas. The built standalone page at
+// /chat/index.html redirects here, so the whole prefix is the one shell.
+function bxAtChatPath() {
+  if (typeof location === "undefined") return false;
+  const p = String(location.pathname || "");
+  return p === "/chat" || p === "/chat/" || p.indexOf("/chat/") === 0;
+}
 // A canvas id has two spellings: the chat half's bare one and the store row's
 // `canvas|`-prefixed one. The one session list matches them as the same row.
 function bxBareCanvas(id) { return String(id == null ? "" : id).replace(/^canvas\|/, ""); }
@@ -9639,8 +9647,7 @@ async function bxOpenCanvasId(id) {
   return !!bxTabOpenSaved(hit.name, hit.design, hit.id, hit.session);
 }
 function bxShellInit() {
-  BXVIEW.half = (typeof location !== "undefined" &&
-    (location.pathname === "/chat" || location.pathname === "/chat/")) ? "chat" : "studio";
+  BXVIEW.half = bxAtChatPath() ? "chat" : "studio";
   // the view is right from the first frame; the account arrives asynchronously
   const canvasView = $("view-training"), chatView = $("nn-chat");
   if (canvasView) canvasView.hidden = BXVIEW.half === "chat";
@@ -9690,7 +9697,7 @@ function bxShellInit() {
   });
   // The address bar is the view too: back/forward between the halves works.
   window.addEventListener("popstate", () => {
-    const half = (location.pathname === "/chat" || location.pathname === "/chat/") ? "chat" : "studio";
+    const half = bxAtChatPath() ? "chat" : "studio";
     if (half !== BXVIEW.half) { bxChatEnsure(); bxViewSet(half); }
   });
 }
