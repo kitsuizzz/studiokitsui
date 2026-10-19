@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowUpIcon, PaperclipIcon, StopIcon, XIcon } from "./Icon";
 import { processImageFile } from "../lib/image";
 import type { SendMode } from "../types";
@@ -13,6 +13,10 @@ interface ComposerProps {
 }
 
 const MAX_IMAGES = 4;
+
+/** The input stops growing here and scrolls (keep in step with
+    `--composer-input-max` in index.css). */
+const MAX_INPUT_HEIGHT = 160;
 
 const isMac =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform ?? "");
@@ -29,7 +33,22 @@ export default function Composer({
   const [images, setImages] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragDepth = useRef(0);
+
+  // One line until the message needs another; past the cap it scrolls.
+  const fitInput = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT) + "px";
+    el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden";
+  };
+  useLayoutEffect(fitInput, [value]);
+  useEffect(() => {
+    window.addEventListener("resize", fitInput);
+    return () => window.removeEventListener("resize", fitInput);
+  }, []);
 
   const addFiles = async (files: FileList | File[]) => {
     if (disabled) return;
@@ -113,6 +132,7 @@ export default function Composer({
         )}
 
         <textarea
+          ref={inputRef}
           className="composer-input"
           rows={1}
           value={value}

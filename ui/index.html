@@ -1358,6 +1358,10 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
   /* the chat half's main area, mounted inside the one shared shell */
   #nn-chat { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative;
              display: flex; flex-direction: column; }
+  /* The page's generic form rules belong to the canvas half's forms; the chat
+     brings its own (its textarea was inheriting the canvas's 96px minimum and
+     standing twice as tall as its content). */
+  #nn-chat textarea { min-height: 0; }
   /* the welcome is full-bleed under the top bar: the menu returns with the
      first session (a door or "New session" opens one) */
   html.at-landing #bxsidebar { display: none; }
