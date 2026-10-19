@@ -1524,7 +1524,7 @@ header { max-width: none; margin: 0; padding: 18px 16px 14px;
     <div class="bxtools" id="bxtools">
       <span class="bxheadtitle" id="bxtTitle">Studio Kitsui</span>
       <span class="bxheadtag" id="bxtTag" hidden></span>
-      <span class="bxtbtn" id="bxtChat" hidden title="back to the chat conversation this canvas belongs to"
+      <span class="bxtbtn" id="bxtChat" hidden title="to the chat half"
             onclick="bxChatGo()">Chat →</span>
       <span class="bxtspace"></span>
       <span class="bxtbtn" id="bxtDocs" title="the handbook: what this is, how to use the boxes"
@@ -10618,10 +10618,12 @@ function bxCanvasSaveActive() {                 // best-effort: seal the canvas 
     } catch (e) { resolve(false); }
   });
 }
-function bxChatGo() {                           // the head's door back to the chat half
+function bxChatGo() {                           // the head's door to the chat half
   const p = bxProject();
-  if (!p || p.kind === "ai" || !p.session) return;
-  const dest = "/chat?conversation=" + p.session;
+  if (!p) return;
+  // a bound canvas lands in its conversation, every other one (the AI
+  // agent's included) in the chat half itself
+  const dest = p.session != null ? "/chat?conversation=" + p.session : "/chat";
   const go = () => {
     if (typeof location === "undefined") return;
     if (location.replace) location.replace(dest); else location.href = dest;
@@ -10642,10 +10644,16 @@ function bxHeadRefresh() {                     // the head: the canvas's name, i
                     : d === "cpu" ? "cpu" : "no backend";
     tag.hidden = !a;
   }
-  // Chat → is live on a canvas that belongs to a chat conversation; the
-  // AI agent's tab is a conversation of its own, and has no such thing.
+  // Chat → is the head's standing door to the chat half: a canvas that
+  // belongs to a conversation lands in it, every other canvas (the AI
+  // agent's included) in the chat half itself.
   const chat = $("bxtChat");
-  if (chat) chat.hidden = !(p && p.kind !== "ai" && p.session != null);
+  if (chat) {
+    chat.hidden = !p;
+    chat.title = p && p.session != null
+      ? "back to the chat conversation this canvas belongs to"
+      : "to the chat half";
+  }
 }
 function bxThemeApply() {                      // the button names the theme it would flip to
   const el = $("bxtTheme");

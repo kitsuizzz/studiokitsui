@@ -37,8 +37,10 @@ mints the canvas id, seals a fresh blank canvas under it (the row's key is
 the AAD its record is sealed with, `canvas|<id>`) and appends the canvas's
 tab to the shared open-tabs record (`session|current`); later clicks just
 cross. On the canvas side the door's parameter opens that canvas as a tab,
-the saves keep the binding, and a **Chat →** door carries the conversation
-back; a pre-v2 store that still carries the open-tabs record under the bare
+the saves keep the binding, and the head's **Chat →** door carries the
+conversation back — the door stands on every canvas, and one without a
+conversation of its own (the AI canvas included) just crosses to the chat
+half. A pre-v2 store that still carries the open-tabs record under the bare
 key `current` is folded into `session|current` at first boot, the legacy
 tabs first, so a link made in the chat meanwhile never shadows them. The
 binding also rides in the canvas record's `session` field — the
@@ -212,7 +214,7 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the whole app — the sidebar at the left (the open canvases, named and dotted; the + makes a blank one; the × closes one — never the last — warning first when it is unsaved; the ⌘K door is the switcher — New canvas / AI agent / the saved list / the jump between them; the chevron folds it to a rail), the toolbar head above the canvas (Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves), the canvas, the right-click menus; one self-contained page |
+| `ui/index.html` | the whole app — the sidebar at the left (the open canvases, named and dotted; the + makes a blank one; the × closes one — never the last — warning first when it is unsaved; the ⌘K door is the switcher — New canvas / AI agent / the saved list / the jump between them; the chevron folds it to a rail), the head above the canvas (the Chat → door to the chat half — a bound canvas lands in its conversation, every other one in the half itself — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves), the canvas, the right-click menus; one self-contained page |
 | `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
 | `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
 | `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |

@@ -254,7 +254,7 @@ globalThis.__t = {
   bxTabsRender, bxTabNew, bxTabSave, bxTabSelect, bxTabOpenSaved, bxProject,
   bxTabClose, bxTabAnyDirty, bxTabLoad, bxSessionNow, bxSessionPush, bxSessionMatch,
   bxTabNewAI, bxTalkOn, bxTalkSend, bxTalkRender, bxTalkSync, bxTalkTask, bxTalkCurrent,
-  bxHeadRefresh,
+  bxHeadRefresh, bxChatGo,
   bxSessionRestore, bxSessionStored, bxAccountOpenApply, bxSplash, BXSESSION,
   bxAccountSync, bxCanvases, bxCanvasRecords, bxStoreRead,
   bxKeyGet, bxKeyPut, bxKeyDrop,
@@ -6519,6 +6519,66 @@ checkAsync("the door: guests to the landing page, accounts to their place", asyn
   else global.localStorage = keepLS;
   if (keepFetch === undefined) delete global.fetch;
   else global.fetch = keepFetch;
+});
+
+checkAsync("the head's door to the chat half: it stands on every canvas, and a bound one lands in its conversation", async () => {
+  const turn = () => new Promise(r => setImmediate(r));
+  const flush = async () => { for (let i = 0; i < 8; i++) await turn(); };
+  const keepLoc = global.location;
+  global.location = { pathname: "/studio", replaced: "", replace(u) { this.replaced = String(u); } };
+  const keepAcct = { user: __t.BXACCT.user, key: __t.BXACCT.key,
+                     locked: __t.BXACCT.locked, known: __t.BXACCT.known };
+  // a guest: the save the door waits on is a no-op, so the door is instant
+  __t.BXACCT.known = false;
+  __t.BXACCT.user = null;
+  __t.BXACCT.key = null;
+  __t.BXACCT.locked = false;
+  const arrive = __t.BX.active;
+  let plain = null;
+  try {
+    // a canvas that belongs to no conversation: the door stands, and it
+    // goes to the chat half itself
+    plain = (__t.BX.projects || []).filter(x => x.kind !== "ai").pop() || __t.bxTabNew();
+    if (plain.id !== __t.BX.active) __t.bxTabSelect(plain.id);
+    plain.session = null;
+    __t.bxHeadRefresh();
+    ok(!getEl("bxtChat").hidden, "the door stands on a canvas that belongs to no conversation");
+    eql(getEl("bxtChat").title, "to the chat half", "\u2026and it names the half, not a conversation");
+    __t.bxChatGo();
+    await flush();
+    eql(global.location.replaced, "/chat", "\u2026and it goes to the chat half itself");
+    // the same canvas, bound to a conversation: the door lands in it
+    plain.session = "77";
+    __t.bxHeadRefresh();
+    eql(getEl("bxtChat").title, "back to the chat conversation this canvas belongs to",
+        "\u2026and the bound canvas says which conversation it is");
+    global.location.replaced = "";
+    __t.bxChatGo();
+    await flush();
+    eql(global.location.replaced, "/chat?conversation=77", "\u2026and it lands in that conversation");
+    // the AI agent's canvas is a conversation of its own — the door stands
+    // there too
+    (__t.BX.projects || []).find(x => x.kind === "ai") || __t.bxTabNewAI();
+    __t.bxHeadRefresh();
+    ok(!getEl("bxtChat").hidden, "\u2026and it stands on the AI canvas as well");
+    eql(getEl("bxtChat").title, "to the chat half", "\u2026naming the half, not the canvas's own conversation");
+    global.location.replaced = "";
+    __t.bxChatGo();
+    await flush();
+    eql(global.location.replaced, "/chat", "\u2026and from there, too, it goes to the chat half itself");
+    // the canvas is still where it was when the user comes back
+    __t.bxTabSelect(plain.id);
+    await flush();
+  } finally {
+    if (plain) plain.session = null;
+    if (arrive && arrive !== __t.BX.active) __t.bxTabSelect(arrive);
+    __t.BXACCT.user = keepAcct.user;
+    __t.BXACCT.key = keepAcct.key;
+    __t.BXACCT.locked = keepAcct.locked;
+    __t.BXACCT.known = keepAcct.known;
+    if (keepLoc === undefined) delete global.location;
+    else global.location = keepLoc;
+  }
 });
 
 Promise.all(pending).then(async () => {      // async checks report with the rest
