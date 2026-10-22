@@ -1,0 +1,64 @@
+/* ─── nnstudio shell · 00 · tokens ───────────────────────────────────────
+ * The Salon palette (light and dark), the legacy aliases, and the three typefaces. Every rule below reads these values.
+ * Order is load-bearing: the build concatenates this file in numeric order.
+ */
+
+  /* ============================================================
+     the Salon tokens (chat.kitsui's design language).
+     Dark is the canvas's home; html[data-theme="light"] flips the
+     whole page. Everything below reads these values.
+     ============================================================ */
+  :root {
+    --s-wall: #1a1a19;                      /* the wall */
+    --s-wall2: #222221;                     /* a raised surface */
+    --s-wall3: #2a2a29;                     /* wells, bars */
+    --s-text: #ebebe7;                      /* ink */
+    --s-label: #b0b0ab;                     /* a label */
+    --s-label2: #7a7a76;                    /* a quiet label */
+    --s-label3: #55554f;                    /* the faintest */
+    --s-hair: #2c2c2a;                      /* hairlines */
+    --s-hair2: #3a3a38;                     /* a visible edge */
+    --s-dot: #ff5a45;                       /* the one accent — state, never decoration */
+    --s-dot-soft: rgba(255,90,69,.22);
+    --s-danger: #ff7a66;
+    --s-ok: #8fc07f;
+    --s-grid: rgba(255,255,255,.045);       /* the canvas's lattice */
+    --s-grid2: rgba(255,255,255,.085);
+    --s-shadow: rgba(0,0,0,.45);
+    --wall-pad: clamp(24px, 6vw, 96px);   /* the chat's content inset: head and board */
+    --font-label: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-work: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --font-mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+    --bg: var(--s-wall);
+    --panel: var(--s-wall2);
+    --panel-brd: var(--s-hair2);
+    --ink: var(--s-text);
+    --ink-dim: var(--s-label);
+    --ink-faint: var(--s-label2);
+    --accent: var(--s-text);                /* hover/selected = ink; the dot is drawn by hand */
+    --accent2: var(--s-text);
+    --warm: var(--s-dot);
+    --blue: var(--s-label);
+    --err: var(--s-danger);
+    --mono: var(--font-mono);
+  }
+  html[data-theme="light"] {
+    --s-wall: #fafaf7;
+    --s-wall2: #f1f1ed;
+    --s-wall3: #e8e8e3;
+    --s-text: #161616;
+    --s-label: #4a4a47;
+    --s-label2: #8a8a86;
+    --s-label3: #b5b5b0;
+    --s-hair: #e3e3de;
+    --s-hair2: #cfcfc9;
+    --s-dot: #e5321b;
+    --s-dot-soft: rgba(229,50,27,.16);
+    --s-danger: #c8321c;
+    --s-ok: #3f7a3a;
+    --s-grid: rgba(0,0,0,.05);
+    --s-grid2: rgba(0,0,0,.09);
+    --s-shadow: rgba(0,0,0,.12);
+  }
+

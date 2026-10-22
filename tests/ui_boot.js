@@ -1563,11 +1563,12 @@ check("the Backend menu: Local and Remote drop down into their instructions", ()
   let pane = m.children.find(c => c.className === "bxbpane");
   ok(pane, "Local drops down");
   const hint = () => pane.querySelectorAll(".bxbhint").map(e => e.textContent).join(" | ");
-  ok(hint().indexOf("the agent") >= 0 && hint().indexOf("contacts this app") >= 0,
-    "…with the steps");
-  ok(pane.querySelectorAll(".bxbcode").map(e => e.textContent).join("").indexOf("nnstudio_agent.py") >= 0,
-    "…and the agent command");
-  ok(hint().indexOf("waiting for an agent") >= 0, "…and the waiting line while none is connected");
+  ok(hint().indexOf("the runner") >= 0 && hint().indexOf("connection code") >= 0,
+    "…with the pairing steps");
+  ok(pane.querySelectorAll(".bxbcode").map(e => e.textContent).join("").indexOf("runner/runner.py") >= 0,
+    "…and the runner command");
+  ok(pane.querySelectorAll(".bxbin").some(e => e.placeholder === "ABCD-EFGH"),
+    "…and the code field the runner's code goes into");
   // Remote replaces it: the key lives there
   heads()[1].click();
   pane = m.children.find(c => c.className === "bxbpane");
@@ -1642,10 +1643,11 @@ check("the Train door: in the Backend menu, the box on and off the canvas", () =
   ok(hint.indexOf("connected") >= 0 && hint.indexOf("live usage are in the server config") >= 0,
      "Backend → Local keeps the connection and points at the server config");
   __t.bxtBackendToggle();
-  // a saved Modal key still counts as a backend (the run action's readiness)
+  // a saved Modal key is not a transport: Run waits for a connected runner
   __t.BX_BACKEND.mode = "remote";
   __t.BX_BACKEND.key = "ak-test";
-  ok(__t.bxtRunEnabled() === true, "a saved Modal key also establishes a backend");
+  __t.BXRUN.local.connected = false;
+  ok(__t.bxtRunEnabled() === false, "a saved Modal key alone does not establish a backend");
   __t.BX_BACKEND.mode = "local";
   __t.BX_BACKEND.key = "";
   // leave the canvas and the backend as the next block found them
@@ -2215,6 +2217,15 @@ check("the agent box fires, selects and streams its task \u2014 token by token",
   ok(allText(panes[0]).indexOf("Hello") >= 0 &&
      allText(panes[0]).indexOf("read \u00b7 nn.py") >= 0,
     "the chain of thought streams into the box: " + allText(panes[0]));
+  // a log batch repaints the body, not the head/buttons/grip
+  const headBefore = panes[0].querySelector(".bxphead");
+  __t.bxLogApply("t1", [{ id: "p1", kind: "say", text: "!", append: true }]);
+  __t.bxAgentSync("t1");
+  panes = getEl("bxcanvas").querySelectorAll(".bxlogpane");
+  ok(panes[0].querySelector(".bxphead") === headBefore,
+    "a log batch keeps the pane's head");
+  ok(allText(panes[0]).indexOf("Hello!") >= 0,
+    "\u2026and appends the new text: " + allText(panes[0]).slice(0, 80));
   // the controls live in the box
   __t.bxTaskCmd("t1", "pause", null, () => {});
   __t.bxTaskCmd("t1", "cancel", { reason: "stopped by you" }, () => {});
@@ -4605,6 +4616,25 @@ check("breadboard: boxes snap to the grid, siblings show guides", () => {
   [born, a, b].forEach(n => __t.bxRemove(n.id));
 });
 
+check("a drag paints in place; only the drop rebuilds the canvas", () => {
+  __t.bxImportJSON(JSON.stringify({ type: "canvas", version: 1, nodes: [], edges: [] }), {});
+  const i = __t.bxAdd("input", 0, 0, { dout: 2 });
+  const o = __t.bxAdd("output", 300, 0, { din: 2 });
+  __t.bxConnect(i.id, o.id);
+  __t.bxRender();
+  const host = getEl("bxcanvas");
+  const before = host.children[0];
+  __t.bxStartMove([i.id], i.id, 0, 0);
+  __t.bxMove({ clientX: 60, clientY: 80 });
+  ok(host.children[0] === before, "the drag keeps the rendered SVG");
+  __t.bxMove({ clientX: 80, clientY: 100 });
+  ok(host.children[0] === before, "\u2026and the next move too");
+  __t.bxUp({});
+  ok(host.children[0] !== before, "the drop lands one full render");
+  __t.bxRemove(i.id);
+  __t.bxRemove(o.id);
+});
+
 check("shift+drag grabs several boxes, and they move as one", () => {
   __t.bxImportJSON(JSON.stringify({ type: "canvas", version: 1, nodes: [], edges: [] }), {});
   const a = __t.bxAdd("layer", 1000, 1000, {});
@@ -5088,6 +5118,7 @@ check("the session: the record it names, and the match to the store", () => {
   const keepId = __t.bxProject().id;
   __t.bxTabOpenSaved("alpha", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-a");
   const beta = __t.bxTabOpenSaved("beta", { type: "canvas", version: 1, nodes: [], edges: [] }, "c-b");
+  eql(__t.BX.nodes.length, 0, "a standalone empty canvas stays empty");
   __t.bxTabNew();                              // an unsaved tab is not remembered
   eql(__t.bxSessionNow(),
       { tabs: [{ id: "c-a", name: "alpha" }, { id: "c-b", name: "beta" }], active: null },
@@ -5099,6 +5130,14 @@ check("the session: the record it names, and the match to the store", () => {
   eql(__t.bxSessionMatch({ tabs: [{ id: "c-b" }, { id: "c-gone" }, { id: "c-a" }] }, rows),
       [rows[0], rows[2]],
       "…and a restore opens what still exists, in the saved order");
+  // A canvas the chat half sealed blank opens as the default skeleton.
+  const linked = __t.bxTabOpenSaved("linked",
+    { type: "canvas", version: 1, nodes: [], edges: [] }, "c-linked", 42);
+  ok(linked && linked.session === "42", "a chat-sealed canvas carries its session");
+  eql([__t.BX.nodes.filter(n => n.kind === "input").length,
+       __t.BX.nodes.filter(n => n.kind === "output").length,
+       __t.BX.edges.length], [1, 1, 1],
+      "…and opens with one input wired straight into one output");
   // tidy: the boot tab is the one left, reloaded from its own stash
   __t.BX.projects = __t.BX.projects.filter(x => x.id === keepId);
   __t.BX.active = keepId;

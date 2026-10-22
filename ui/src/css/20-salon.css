@@ -1,0 +1,451 @@
+/* ─── nnstudio shell · 20 · the Salon skin ───────────────────────────────
+ * The final skin over the canvas half. This file wins over 10-base.css: edit here first.
+ * Order is load-bearing: the build concatenates this file in numeric order.
+ */
+  /* ============================================================
+     the Salon skin over the canvas — chat.kitsui's theme and
+     feel (the reference mockups: ui/preview/salon-mock.html).
+     One rule: one accent — the red dot — and it means state
+     (selected · running · wrong), never decoration. Everything
+     else is ink, hairline and quiet.
+     ============================================================ */
+
+  /* ---- the page, the topbar ---- */
+  body { font: 14px/1.5 var(--font-label); background: var(--s-wall); color: var(--s-text); }
+  header { height: 40px; padding: 0 20px; gap: 14px; flex-wrap: nowrap;
+           align-items: center; border-bottom: 1px solid var(--s-hair); }
+  .logo { display: flex; align-items: center; text-decoration: none; color: var(--s-text); }
+  .sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+         white-space: nowrap; font-size: 12.5px; color: var(--s-label2); }
+  main { padding: 10px 14px 14px; }
+  .card { border-radius: 0; }
+  /* the account: the chat half's pill (an avatar, the name, a chevron) and
+     the settings gear beside it — the one top bar both mains wear */
+  /* the one app's two halves: one switch, the same place in both */
+  .bxhalves { display: inline-flex; align-items: stretch; height: 28px; flex: none;
+              border: 1px solid var(--s-hair2); }
+  .bxhalves button { border: 0; background: transparent; color: var(--s-label);
+                     padding: 0 12px; height: 100%; cursor: pointer;
+                     font: 500 12px/1 var(--font-label); }
+  .bxhalves button + button { border-left: 1px solid var(--s-hair2); }
+  .bxhalves button:hover { color: var(--s-text); }
+  .bxhalves button.on { background: var(--s-text); color: var(--s-wall); }
+  .bxuser { display: flex; align-items: center; gap: 6px; }
+  .bxtgear { display: grid; place-items: center; width: 28px; height: 28px;
+             border-radius: 999px; color: var(--s-label); cursor: pointer;
+             transition: background-color .15s, color .15s; }
+  .bxtgear:hover { background: var(--s-wall2); color: var(--s-text); }
+  .bxtgear svg { width: 14px; height: 14px; fill: none; stroke: currentColor;
+                 stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .bxuserbtn { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+               border: 0; background: transparent; padding: 4px 8px;
+               border-radius: 999px; color: var(--s-text);
+               font: 500 12.5px/1.4 var(--font-label); text-transform: none;
+               letter-spacing: 0; user-select: none;
+               transition: background-color .15s, color .15s; }
+  .bxuserbtn:hover { background: var(--s-wall2); }
+  .bxuavatar { display: flex; align-items: center; justify-content: center; flex: none;
+               width: 22px; height: 22px; border-radius: 50%;
+               background: var(--s-text); color: var(--s-wall);
+               font: 600 11px/1 var(--font-label); }
+  .bxuavatar.guest { background: transparent; border: 1px solid var(--s-hair2);
+                     color: var(--s-label2); }
+  .bxuavatar .bxuico { width: 12px; height: 12px; fill: none; stroke: currentColor;
+                       stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .bxuname { max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+             white-space: nowrap; }
+  .bxucar { color: var(--s-label2); font-size: 9px; }
+  #bxtAccountMenu { position: absolute; top: calc(100% + 10px); right: 0; left: auto;
+                    width: 248px; padding: 12px; background: var(--s-wall);
+                    border: 1px solid var(--s-hair2); z-index: 65;
+                    box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+  #bxtAccountMenu .accnote { margin: 0 0 10px; font: 400 12px/1.5 var(--font-label);
+                             color: var(--s-label2); }
+  #bxtAccountMenu .accnote strong { font-weight: 500; color: var(--s-text); }
+  #bxtAccountMenu .accrole { display: inline-block; margin-left: 6px; padding: 1px 6px;
+                             border: 1px solid var(--s-dot); background: rgba(255,90,69,.12);
+                             font: 500 9px/1.4 var(--font-mono); letter-spacing: .12em;
+                             text-transform: uppercase; color: var(--s-dot); }
+  #bxtAccountMenu .accbtn { display: block; width: 100%; margin-top: 8px;
+                            padding: 8px 12px; border: 1px solid var(--s-text);
+                            background: var(--s-text); color: var(--s-wall);
+                            font: 500 13px/1.2 var(--font-label); cursor: pointer;
+                            text-align: center; }
+  #bxtAccountMenu .accbtn:hover { background: var(--s-dot); border-color: var(--s-dot);
+                                  color: #fff; }
+  #bxtAccountMenu .accbtn.ghost { background: transparent; color: var(--s-text);
+                                  border-color: var(--s-hair2); }
+  #bxtAccountMenu .accbtn.ghost:hover { border-color: var(--s-text); background: transparent;
+                                        color: var(--s-text); }
+  #bxtAccountMenu .accconfirm { margin: 0 0 2px; font: 500 12px/1.5 var(--font-label);
+                                color: var(--s-danger); }
+  #bxtAccountMenu .accbtn.danger { background: var(--s-danger); border-color: var(--s-danger);
+                                   color: #1a1a19; }
+  #bxtAccountMenu .accbtn.danger:hover { background: #ff9a88; border-color: #ff9a88; }
+  /* ---- the chips and modes ---- */
+  .chip, .mode { border-radius: 0; }
+  .chip { font: 500 10px/1.4 var(--font-mono); letter-spacing: .05em;
+          text-transform: uppercase; color: var(--s-label); border: 1px solid var(--s-hair2);
+          background: transparent; padding: 5px 9px; }
+  .chip:hover, .chip.tiny:hover { color: var(--s-text); border-color: var(--s-text);
+                                  background: transparent; }
+  .chip.tiny { padding: 3px 7px; font-size: 10px; }
+  .chip.act { color: var(--s-text); border-color: var(--s-text); background: var(--s-wall2); }
+  .mode { font: 500 11px/1.4 var(--font-mono); letter-spacing: .04em; text-transform: uppercase;
+          color: var(--s-label); border: 1px solid var(--s-hair2); background: transparent;
+          padding: 5px 11px; }
+  .mode:hover { color: var(--s-text); border-color: var(--s-text); }
+  .mode.act { color: var(--s-text); border-color: var(--s-text); background: transparent; }
+
+  /* ---- the toolbar strip: a Salon head ---- */
+  .bxtools { height: 40px; gap: 22px; border: 0; background: transparent;
+             padding: 0 2px; margin: 0; }
+  .bxtbtn { border: 0; background: transparent; padding: 4px 0;
+            font: 500 11px/1.4 var(--font-mono); letter-spacing: .04em;
+            text-transform: uppercase; color: var(--s-label); }
+  .bxtbtn:hover { color: var(--s-text); border-color: transparent; }
+  .bxtbtn.off, .bxtbtn.off:hover { color: var(--s-label2); opacity: .55; }
+  .bxtdrop { top: 38px; left: 0; min-width: 220px; padding: 10px;
+             background: var(--s-wall); border: 1px solid var(--s-hair2);
+             box-shadow: 0 18px 40px var(--s-shadow); }
+  .bxtdrop-r { left: auto; right: 0; }
+  .bxtmi { padding: 6px 8px; border-radius: 0; font-size: 12.5px; color: var(--s-label); }
+  .bxtmi:hover { background: var(--s-wall2); color: var(--s-text); }
+  .bxtmi.dim, .bxtmi.off { color: var(--s-label2); }
+  .bxtcat { border-radius: 0; font: 500 10px/1.4 var(--font-mono); letter-spacing: .06em;
+            text-transform: uppercase; color: var(--s-label2); padding: 8px 8px 4px; }
+  .bxtcat:hover { background: transparent; color: var(--s-text); }
+  .bxtcards { gap: 8px; padding: 4px 2px 10px; }
+  .bxpalitem { border-radius: 0; }
+  .bxpalitem:hover { background: var(--s-wall2); }
+
+  /* ---- the session list in the shell sidebar (the rules below) ---- */
+
+  /* ---- the floating menu and its forms ---- */
+  .bxmenu { background: var(--s-wall); border: 1px solid var(--s-hair2); border-radius: 0;
+            padding: 8px; box-shadow: 0 18px 40px var(--s-shadow); }
+  .bxmenu .mi { padding: 6px 8px; border-radius: 0; font-size: 12.5px; color: var(--s-label); }
+  .bxmenu .mi:hover { background: var(--s-wall2); color: var(--s-text); }
+  .mhead { font: 500 10px/1.4 var(--font-mono); letter-spacing: .06em; color: var(--s-label2);
+           padding: 8px 8px 3px; }
+  .mhead:not(:first-child) { border-top: 1px solid var(--s-hair); margin-top: 5px; }
+  .mhead.drop { border-radius: 0; padding: 6px 8px; }
+  .mhead.drop:hover { background: var(--s-wall2); color: var(--s-text); }
+  .mhead.drop.on { color: var(--s-text); }
+  .bxmenu .bf { padding: 4px 2px 6px; gap: 8px; }
+  .bxmenu .bf label { font-size: 12.5px; color: var(--s-label2); }
+  .bxmenu .bf input, .bxmenu .bf select, .bxmenu .bf textarea,
+  .bxbin, .bxmat, .bxinp { background: var(--s-wall2); border: 1px solid var(--s-hair2);
+                           border-radius: 0; color: var(--s-text); padding: 5px 7px;
+                           font: 12px var(--font-label); }
+  .bxmenu .bf input:focus, .bxmenu .bf select:focus, .bxmenu .bf textarea:focus,
+  .bxbin:focus, .bxmat:focus { outline: none; border-color: var(--s-text); }
+  .bxmenu .bf input[type="number"], .bxmenu .bf input.wide {
+    font-family: var(--font-mono); font-size: 11.5px; }
+  .bxsel { background: var(--s-wall2); color: var(--s-text); border: 1px solid var(--s-hair2);
+           border-radius: 0; padding: 4px 6px; font: 11.5px var(--font-mono); }
+  .bxjson, .bxbcode { background: var(--s-wall2); border: 1px solid var(--s-hair2);
+                      border-radius: 0; color: var(--s-label); font: 11px/1.55 var(--font-mono); }
+  .panehint, .bxbhint { font-family: var(--font-label); font-size: 12px; color: var(--s-label2); }
+  .panehint.bad, .bxmenu .bf .warnbx { color: var(--s-danger); }
+  .warnbx { border-radius: 0; }
+  .wten { border-radius: 0; }
+  .wten:hover { background: var(--s-wall2); }
+  .wten.on { border-color: var(--s-text); background: var(--s-wall2); }
+  .bxbhint.runbad { color: var(--s-danger); }
+  .bxbhint.runok { color: var(--s-ok); }
+
+  /* ---- the estimate panel ---- */
+  .bxvram .vhead { font: 500 10px/1.4 var(--font-mono); letter-spacing: .06em;
+                   text-transform: uppercase; color: var(--s-label2); }
+  .bxvram .vrow { font: 11px/1.5 var(--font-mono); color: var(--s-label); }
+  .bxvram .vrow.w { color: var(--s-text); }
+  .bxvram .vrow.kv, .bxvram .vrow.tr, .bxvram .vrow.frz { color: var(--s-label2); }
+  .bxvram .vrow.tot { color: var(--s-text); font-weight: 500; }
+  .bxvram .vrow.sub, .bxvram .vrow.note { color: var(--s-label3); font-size: 10px; }
+  .bxvram .vrow.warn { color: var(--s-dot); }
+  .bxvram .vbar { height: 4px; border-radius: 0; background: var(--s-wall3); }
+  .bxvram .vbar .w { background: var(--s-text); }
+  .bxvram .vbar .kv { background: var(--s-label2); }
+  .bxvram .vbar .tr { background: var(--s-label3); }
+
+  /* ---- the panes: serif words, mono deeds ---- */
+  .bxlogpane { background: var(--s-wall); border: 1px solid var(--s-hair2); border-radius: 0; }
+  .bxphead { background: var(--s-wall2); border-bottom: 1px solid var(--s-hair); padding: 7px 10px; }
+  .bxptitle { font: 500 13px var(--font-label); color: var(--s-text); }
+  .bxchip { border: 1px solid var(--s-hair2); border-radius: 0;
+            font: 500 10px/1.4 var(--font-mono); letter-spacing: .05em;
+            text-transform: uppercase; color: var(--s-label2); padding: 2px 6px; }
+  .bxchip.running { border-color: var(--s-dot); color: var(--s-dot); }
+  .bxchip.paused { border-color: var(--s-label); color: var(--s-label); }
+  .bxchip.done { border-color: var(--s-ok); color: var(--s-ok); }
+  .bxchip.cancelled { border-color: var(--s-danger); color: var(--s-danger); }
+  .bxbbtn { border: 1px solid var(--s-hair2); border-radius: 0; padding: 3px 7px;
+            font: 500 10px/1.4 var(--font-mono); letter-spacing: .05em;
+            text-transform: uppercase; color: var(--s-label); }
+  .bxbbtn:hover { border-color: var(--s-text); color: var(--s-text); }
+  .bxpbody { font-family: var(--font-mono); font-size: 11.5px; }
+  .bxpsay { font-family: var(--font-work); font-size: 13.5px; color: var(--s-text); }
+  .bxpitem.note .bxpsay { color: var(--s-label2); }
+  .bxpdo { font: 11px/1.6 var(--font-mono); color: var(--s-label); }
+  .bxpstep { font: 10px/1.6 var(--font-mono); color: var(--s-label3); }
+  .bxperr { color: var(--s-danger); }
+  .bxpraw { background: var(--s-wall2); border-radius: 0; color: var(--s-label); }
+  .bxpform { border-top: 1px solid var(--s-hair); }
+  .bxpform .rf span { color: var(--s-label2); }
+  .bxprow { padding: 4px 0; }
+  .bxpbody .bxbhint { font-family: var(--font-label); }
+
+  /* ---- the AI agent canvas: the talk surface ---- */
+  .bxtalk { background: var(--s-wall); }
+  .bxtalkin { background: var(--s-wall2); border: 1px solid var(--s-hair2); border-radius: 0;
+              color: var(--s-text); font: 12px/1.5 var(--font-mono); }
+  .bxtalkin:focus { border-color: var(--s-text); }
+  .bxtalkfoot { border-top: 1px solid var(--s-hair); background: var(--s-wall); }
+  .bxtwho { color: var(--s-label3); }
+  .bxtitem.you, .bxtitem.agent { border-left: 2px solid var(--s-hair2); }
+  .bxtsay { font-family: var(--font-work); font-size: 13.5px; }
+  .bxtitem.you .bxtsay { font-family: var(--font-label); font-size: 13px; color: var(--s-label); }
+  .bxtitem.agent .bxtwho { color: var(--s-dot); }
+
+  /* ---- the canvas: the lattice, the cards, the wires ---- */
+  .bxgrid .gminor { stroke: var(--s-grid); }
+  .bxgrid .gmajor { stroke: var(--s-grid2); }
+  .drect { fill: var(--s-wall2); stroke: var(--s-hair2); }
+  .dnode:hover .drect { stroke: var(--s-label); }
+  .dnode.sel .drect { stroke: var(--s-text); stroke-width: 1.5; }
+  .dnode.err .drect { stroke: var(--s-danger); stroke-dasharray: 5 4; }
+  .dnode.warn .drect { stroke: var(--s-dot); stroke-dasharray: 5 4; }
+  .dnode.err .drail { stroke: var(--s-danger); }
+  .dnode.warn .drail { stroke: var(--s-dot); }
+  .dnode.off { opacity: .42; }
+  .dnode.off .drect { stroke-dasharray: 3 4; }
+  .dnode.flow .drect { stroke: var(--s-dot); stroke-width: 1.5; }
+  .dnode.now .drect { stroke: var(--s-dot); stroke-width: 2.4; }
+  .dnode.runerr .drect { stroke: var(--s-danger); stroke-width: 2.2; }
+  .dnode.tsrc .drect { stroke: var(--s-ok); stroke-width: 2; }
+  .dnode.ttest .drect { stroke: var(--s-label); stroke-width: 2; }
+  .dnode.tscored .drect, .dnode.tpolicy .drect, .dnode.tscorer .drect {
+    stroke: var(--s-dot); stroke-width: 2; }
+  .dnode.audit .drect { stroke: var(--s-label2); stroke-dasharray: 2 3; }
+  .dtag.tsrc { fill: var(--s-ok); }
+  .dtag.ttest { fill: var(--s-label); }
+  .dtag.tscored, .dtag.tpolicy, .dtag.tscorer { fill: var(--s-dot); }
+  .dtype { fill: var(--s-label2); }
+  .dtype.layer { fill: var(--s-label); }
+  .dtype.custom, .dtype.model { fill: var(--s-text); }
+  .dtype.act, .dtype.op, .dtype.script { fill: var(--s-label2); }
+  .dlabel { fill: var(--s-text); }
+  .dshape { fill: var(--s-label2); }
+  .dshape.fn, .dshape.opfn { fill: var(--s-label); }
+  .dshape.unset { fill: var(--s-label3); }
+  .dstate { fill: var(--s-label2); }
+  .dstate.rev { fill: var(--s-label); }
+  .dstate.err { fill: var(--s-danger); }
+  .dwarn { fill: var(--s-danger); }
+  .dwarn2 { fill: var(--s-dot); }
+  .dfroz { stroke: var(--s-label2); }
+  .dplace { fill: var(--s-label2); }
+  .dplace.gpu { fill: var(--s-ok); }
+  .dplace.sys { fill: var(--s-label); opacity: .85; }
+  .dport { fill: var(--s-wall); stroke: var(--s-label); }
+  .dport.hit:hover { fill: var(--s-dot-soft); }
+  .dport.doff { stroke: var(--s-label3); }
+  .drail:hover { fill: var(--s-dot-soft); }
+  .seldot { fill: var(--s-dot); }
+  .dslot { stroke: var(--s-label2); }
+  .dnode.dropin .dslot { stroke: var(--s-dot); }
+  .dedge { stroke: var(--s-label); }
+  .dedge.unknown { stroke: var(--s-label3); }
+  .dedge.bad { stroke: var(--s-danger); stroke-dasharray: 5 4; }
+  .dedge.live, .dedge.hot { stroke: var(--s-text); }
+  .dedge.flow { stroke: var(--s-dot); stroke-width: 2; }
+  .dedge.sel { stroke: var(--s-text); stroke-width: 2.2; }
+  .dedge.off { stroke: var(--s-label3); }
+  .dedge.tgrad { stroke: var(--s-ok); }
+  .bxguide { stroke: var(--s-label3); stroke-dasharray: 2 4; opacity: .9; }
+  .bxmarquee { fill: var(--s-dot-soft); stroke: var(--s-dot); }
+  .dringbg { stroke: var(--s-hair2); }
+  .dring { stroke: var(--s-dot); }
+  .dringnum { fill: var(--s-label2); }
+
+  /* ---- the boot veil, the toast, the hover card ---- */
+  .bxsplash { background: var(--s-wall); }
+  .bxspin { border: 2px solid var(--s-hair2); border-top-color: var(--s-dot); }
+  .bxsplashnote { font: 12px var(--font-label); color: var(--s-label2); }
+  .bxtoast { background: var(--s-wall); border: 1px solid var(--s-hair2); border-radius: 0;
+             font: 11.5px var(--font-mono); color: var(--s-text); }
+  .bxtip { background: var(--s-wall); border: 1px solid var(--s-hair2); border-radius: 0; }
+  .bxtip .who { color: var(--s-label3); font: 10px var(--font-mono); }
+  .bxtip .what { color: var(--s-text); font: 11.5px var(--font-mono); }
+  .bxtip .shp, .bxtip .row { color: var(--s-label); }
+  .bxtip .note { color: var(--s-label2); }
+
+  /* ---- the shell: the sidebar, the head — the chat half's composition ---- */
+  main { padding: 0; gap: 0; }
+  /* the chat half's main area, mounted inside the one shared shell */
+  #nn-chat { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative;
+             display: flex; flex-direction: column; }
+  /* The page's generic form rules belong to the canvas half's forms; the chat
+     brings its own (its textarea was inheriting the canvas's 96px minimum and
+     standing twice as tall as its content). */
+  #nn-chat textarea { min-height: 0; }
+  /* the welcome is full-bleed under the top bar: the menu returns with the
+     first session (a door or "New session" opens one) */
+  html.at-landing #bxsidebar { display: none; }
+  #nn-chat .app.embedded { height: 100%; }
+  /* the chat's settings is a main-area view under the one shell, not a
+     full-page takeover that would hide the top bar and left menu */
+  #nn-chat #root .settings-page { position: absolute; }
+  .bxsidebar { flex: none; width: 260px; min-width: 0;
+               border-right: 1px solid var(--s-hair); background: var(--s-wall);
+               display: flex; flex-direction: column; transition: width .2s ease; }
+  .bxsidebar.collapsed { width: 56px; }
+  .bxsidebar.collapsed .bxside-text, .bxsidebar.collapsed .bxside-search kbd {
+    display: none; }
+  .bxside-head { flex: none; height: 48px; display: flex; align-items: center;
+                 justify-content: space-between; gap: 8px;
+                 padding: 0 8px 0 20px; border-bottom: 1px solid var(--s-hair); }
+  .bxside-head .bxrspace { flex: 1 1 auto; }
+  .bxsidebtn { width: 32px; height: 32px; display: grid; place-items: center;
+               color: var(--s-label2); cursor: pointer; user-select: none;
+               border: 0; background: transparent;
+               transition: color .15s, background-color .15s; }
+  .bxsidebtn:hover { color: var(--s-text); background: var(--s-wall2); }
+  .bxsidebtn svg { width: 15px; height: 15px; }
+  .bxsidebtn .bxs-chev-r { display: none; }
+  .bxsidebar.collapsed .bxside-head { justify-content: center; padding: 0; }
+  .bxsidebar.collapsed .bxs-chev-l { display: none; }
+  .bxsidebar.collapsed .bxsidebtn .bxs-chev-r { display: block; }
+  .bxsidebar.collapsed .bxs-tool { display: none; }
+  .bxside-new { flex: none; display: flex; align-items: center; justify-content: center;
+                gap: 8px; height: 36px; margin: 16px 16px 8px; padding: 0 12px;
+                border: 1px solid var(--s-text); background: var(--s-text);
+                color: var(--s-wall); font: 500 13px var(--font-label);
+                cursor: pointer; user-select: none;
+                transition: background-color .15s, border-color .15s, color .15s; }
+  .bxside-new:hover { background: var(--s-dot); border-color: var(--s-dot);
+                      color: #fff; }
+  .bxside-new svg { width: 15px; height: 15px; flex: none; }
+  .bxsidebar.collapsed .bxside-new { margin: 16px 10px 6px; padding: 0; }
+  .bxside-search { flex: none; display: flex; align-items: center; gap: 8px;
+                   height: 32px; margin: 0 16px 12px; padding: 0 10px;
+                   border: 1px solid var(--s-hair); color: var(--s-label2);
+                   font: 400 12.5px var(--font-label); cursor: pointer;
+                   user-select: none; transition: color .15s, border-color .15s; }
+  .bxside-search:hover { color: var(--s-text); border-color: var(--s-hair2); }
+  .bxside-search svg { width: 13px; height: 13px; flex: none; }
+  .bxside-search kbd { margin-left: auto; font: 11px var(--font-mono);
+                       color: var(--s-label3); }
+  .bxsidebar.collapsed .bxside-search { justify-content: center; margin: 0 10px 8px;
+                                        padding: 0; }
+  .bxlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0; }
+  .bxcitem { position: relative; display: flex; align-items: center; gap: 8px;
+             padding: 8px 12px 8px 18px; border-left: 2px solid transparent;
+             color: var(--s-label); cursor: pointer;
+             transition: background-color .12s, color .12s; }
+  .bxcitem:hover { background: var(--s-wall2); color: var(--s-text); }
+  .bxcitem.on { background: var(--s-wall2); border-left-color: var(--s-dot);
+                color: var(--s-text); }
+  .bxctile { display: none; width: 26px; height: 26px; flex: none;
+             place-items: center; border: 1px solid var(--s-hair2);
+             font: 500 12px var(--font-mono); color: var(--s-label); }
+  .bxctile .bxtdot { width: 6px; height: 6px; border-radius: 50%;
+                     background: var(--s-dot); }
+  .bxctitle { flex: 1 1 auto; min-width: 0; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap;
+              font: 400 15px var(--font-work); }
+  .bxcitem.ai .bxctitle { color: var(--s-dot); }
+  .bxclose { flex: none; opacity: 0; color: var(--s-label2);
+             font: 700 12px var(--font-mono); padding: 0 2px;
+             transition: color .12s, opacity .12s; }
+  .bxcitem:hover .bxclose { opacity: 1; }
+  .bxclose:hover { color: var(--s-danger); }
+  .bxsidebar.collapsed .bxcitem { justify-content: center; padding: 6px 0;
+                                   border-left-color: transparent; }
+  .bxsidebar.collapsed .bxctile { display: grid; }
+  /* folded, the row is the tile and nothing else: the title and the × take
+     no space at all, so the square sits in the middle of the rail (and no ×
+     hides behind it to click) */
+  .bxsidebar.collapsed .bxctitle, .bxsidebar.collapsed .bxclose { display: none; }
+  .bxsidebar.collapsed .bxcitem.on .bxctile { border-color: var(--s-text);
+                                               background: var(--s-text);
+                                               color: var(--s-wall); }
+  .bxside-foot { flex: none; border-top: 1px solid var(--s-hair); }
+  .bxtabnote { display: none; padding: 8px 20px 0; color: var(--s-label2);
+               font: 11px/1.5 var(--font-mono); }
+  .bxtabnote.on { display: block; }
+  .bxside-link { display: flex; align-items: center; gap: 10px; width: 100%;
+                 padding: 8px 20px; border: 0; background: transparent;
+                 color: var(--s-label); font-size: 13px; cursor: pointer;
+                 transition: color .15s, background-color .15s; }
+  .bxside-link:hover { color: var(--s-text); background: var(--s-wall2); }
+  .bxsidebar.collapsed .bxside-link { justify-content: center; padding: 8px 0; }
+  .view { padding: 0; }
+  /* Three fixed slots, matching the chat head: title on the left, the
+     Chat | Studio switch centred, the canvas controls on the right. */
+  .bxtools { height: 48px; display: grid;
+             grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+             align-items: center; column-gap: 12px; margin: 0;
+             padding: 0 var(--wall-pad); border-bottom: 1px solid var(--s-hair); }
+  .bxtools-left { grid-column: 1; display: flex; align-items: center;
+                  gap: 12px; min-width: 0; }
+  .bxtools-left .bxheadtitle { min-width: 0; }
+  .bxtools-right { grid-column: 3; display: flex; align-items: center;
+                   justify-content: flex-end; gap: 12px; min-width: 0; }
+  .bxtools .bxhalves { grid-column: 2; justify-self: center; }
+  .bxrow { padding: 10px var(--wall-pad) 14px; }
+  /* the switcher: the ⌘K door, the chat half's pattern over the wall */
+  .bxswitch-backdrop { position: fixed; inset: 0; z-index: 60;
+                       display: flex; align-items: flex-start;
+                       justify-content: center; padding-top: 14vh;
+                       background: rgba(22,22,22,.28); }
+  .bxswitcher { width: min(560px, calc(100vw - 32px));
+                background: var(--s-wall); border: 1px solid var(--s-hair2);
+                box-shadow: 0 18px 40px var(--s-shadow); }
+  .bxswitch-input { display: flex; align-items: center; gap: 10px;
+                    padding: 14px 16px; border-bottom: 1px solid var(--s-hair);
+                    color: var(--s-label2); }
+  .bxswitch-input svg { width: 16px; height: 16px; flex: none; }
+  .bxswitch-input input { flex: 1 1 auto; min-width: 0; background: none;
+                           border: 0; outline: 0; font: 400 16px var(--font-label);
+                           color: var(--s-text); }
+  .bxswitch-input input::placeholder { color: var(--s-label3); }
+  .bxswitch-list { list-style: none; margin: 0; padding: 6px 0;
+                   max-height: 50vh; overflow-y: auto; }
+  .bxswitch-list li { display: flex; align-items: baseline;
+                      justify-content: space-between; gap: 12px;
+                      padding: 9px 16px; font: 400 15px var(--font-work);
+                      color: var(--s-text); cursor: pointer; }
+  .bxswitch-list li:hover, .bxswitch-list li.sel { background: var(--s-wall2); }
+  .bxswitch-list li.dim { color: var(--s-label2); cursor: default; }
+  .bxswitch-label { min-width: 0; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+  .bxswitch-hint { flex: none; font: 500 11px var(--font-mono);
+                   letter-spacing: .1em; text-transform: uppercase;
+                   color: var(--s-label2); }
+  .bxheadtitle { font: 500 15px/1.3 var(--font-label); color: var(--s-text);
+                 letter-spacing: .01em; max-width: 46vw; overflow: hidden;
+                 text-overflow: ellipsis; white-space: nowrap; }
+  .bxheadtag { font: 500 10px/1.4 var(--font-mono); letter-spacing: .05em;
+               text-transform: uppercase; color: var(--s-label2);
+               border: 1px solid var(--s-hair2); padding: 2px 6px; white-space: nowrap; }
+  .bxheadtag::before { content: ""; display: inline-block; width: 5px; height: 5px;
+                       border-radius: 50%; background: var(--s-dot);
+                       margin-right: 6px; vertical-align: 1px; }
+  /* the topbar's right: the account, an uppercase item with a circled icon */
+  .sub { display: none; }
+  .bxuserbtn .bxuico { width: 22px; height: 22px; padding: 4px; border-radius: 50%;
+                       border: 1px solid var(--s-hair2); }
+  .bxuserbtn .bxucar { margin-left: 2px; }
+
+  .chip, .bxtbtn, .mode, .bxbbtn, .bxtmi, .bxmenu .mi, .bxtcat {
+    transition: color .15s, border-color .15s, background .15s, opacity .15s;
+  }
+  /* a theme flip eases, the way chat.kitsui's does (the class lives on <html>
+     for one breath, set and cleared by bxThemeToggle) */
+  html.theme-flip, html.theme-flip * {
+    transition: background-color .6s ease, border-color .6s ease, color .6s ease,
+                fill .6s ease, stroke .6s ease, opacity .6s ease !important;
+  }
+

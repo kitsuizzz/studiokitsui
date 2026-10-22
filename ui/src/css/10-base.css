@@ -1,0 +1,689 @@
+/* ─── nnstudio shell · 10 · base and components ──────────────────────────
+ * The page base and the pre-Salon component rules. Kept because the canvas half still uses most of it; the next file overrides the finish.
+ * Order is load-bearing: the build concatenates this file in numeric order.
+ */
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(249,115,22,.11), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(255,255,255,.045), transparent 55%),
+      radial-gradient(1000px 700px at 50% 120%, rgba(255,255,255,.025), transparent 60%),
+      var(--bg);
+    min-height: 100%;
+  }
+  header {
+    max-width: 1180px; margin: 0 auto; padding: 34px 20px 10px;
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  }
+  /* the account: its own corner of the header — an icon, the name, a menu */
+  .bxuser { position: relative; margin-left: auto; align-self: center; }
+  .bxuser[hidden] { display: none; }           /* nothing until the server answers */
+  .bxuserbtn { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+               border: 1px solid var(--panel-brd); background: rgba(0,0,0,.25);
+               padding: 6px 12px 6px 9px; color: var(--ink-dim);
+               font: 600 12.5px var(--mono); user-select: none;
+               transition: color .15s, border-color .15s; }
+  .bxuserbtn:hover { color: var(--ink); border-color: rgba(249,115,22,.6); }
+  .bxuserbtn .bxuico { width: 15px; height: 15px; fill: none; stroke: currentColor;
+                       stroke-width: 1.3; stroke-linecap: round; }
+  .bxuserbtn.locked .bxuico { opacity: .55; }
+  .bxuserbtn .bxucar { color: var(--ink-faint); font-size: 10px; }
+  .bxuser .bxtdrop { top: 100%; left: auto; right: 0; margin-top: 6px; }
+  .mode {
+    cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-dim);
+    border: 1px solid var(--panel-brd); background: rgba(0,0,0,.25);
+    padding: 6px 14px; border-radius: 999px; user-select: none; transition: all .15s;
+  }
+  .mode:hover { color: var(--ink); border-color: rgba(249,115,22,.55); }
+  .mode.act { color: var(--ink); border-color: rgba(249,115,22,.7); background: rgba(249,115,22,.16); }
+  .sub { color: var(--ink-dim); font-size: 13.5px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 14px 20px 60px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-brd);
+    border-radius: 18px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 50px -30px rgba(0,0,0,.8);
+  }
+  button.go { flex: 0 0 auto; }
+  button.btn {
+    cursor: pointer; border: 1px solid rgba(249,115,22,.5); border-radius: 11px;
+    padding: 8px 15px; font: 600 13px system-ui; color: var(--ink);
+    background: rgba(249,115,22,.18); transition: all .15s;
+  }
+  button.btn:hover { background: rgba(249,115,22,.3); border-color: rgba(249,115,22,.75); transform: translateY(-1px); }
+  button.btn:disabled { opacity: .5; cursor: wait; transform: none; }
+  :focus-visible { outline: 2px solid rgba(249,115,22,.7); outline-offset: 2px; }
+  /* training: the layer map, the adapter spec, the connection preview */
+  .archlist { display: flex; flex-direction: column; gap: 4px; max-height: 58vh; overflow: auto; }
+  .pipeline {
+    border: 1px solid var(--panel-brd); background: rgba(0,0,0,.25);
+    border-radius: 12px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+  }
+  .pipeline .pl { margin-bottom: 3px; word-break: break-all; }
+  .pipeline .pl b { color: var(--ink); }
+  .pipeline .pl.warn { color: var(--warm); }
+  /* the data-flow diagram */
+  .flowsvg {
+    border: 1px solid var(--panel-brd); background: rgba(0,0,0,.22);
+    border-radius: 12px; padding: 6px; overflow: auto;
+  }
+  .flowsvg svg { display: block; }
+  /* Step 1: the training UI is one canvas with three boxes (input · layer ·
+     output). Every box is drawn by this one card renderer. */
+  /* the canvas does not grow with the palette: the row is a fixed height and
+     the palette scrolls inside it instead */
+  .bxrow { display: flex; gap: 10px; align-items: stretch;
+           height: max(420px, calc(100vh - 300px)); min-height: 0; }
+  .bxvram { background: rgba(0,0,0,.28); border: 1px solid var(--panel-brd);
+            border-radius: 10px; padding: 8px 9px; display: flex; flex-direction: column; gap: 3px; }
+  .bxvram .vhead { display: flex; align-items: center; justify-content: space-between;
+                   color: var(--ink-dim); font-size: 11.5px; margin-bottom: 2px; }
+  .bxvram .vrow { font: 11px/1.45 var(--mono); color: var(--ink); }
+  .bxvram .vrow.warn { color: #fca5a5; }
+  .bxvram .vrow.w { color: #e5e5e5; }
+  .bxvram .vrow.frz { color: #cbd5e1; }
+  .bxvram .vrow.kv { color: #fdba74; }
+  .bxvram .vrow.tr { color: #fbbf24; }
+  .bxvram .vrow.tot { color: #ffffff; font-weight: 700; }
+  .bxvram .vrow.sub { color: var(--ink-faint); font-size: 10px; line-height: 1.3; }
+  .bxvram .vrow.note { color: var(--ink-dim); }
+  .bxvram .vbar { display: flex; height: 6px; border-radius: 3px; overflow: hidden;
+                  margin: 1px 0 4px; background: rgba(255,255,255,.07); }
+  .bxvram .vbar span { display: block; height: 100%; }
+  .bxvram .vbar .w { background: #f97316; }
+  .bxvram .vbar .kv { background: #fdba74; }
+  .bxvram .vbar .tr { background: #fbbf24; }
+  .bxwrap { position: relative; flex: 1 1 auto; min-height: 0; height: 100%;
+            border: 1px solid var(--panel-brd); border-radius: 12px; overflow: hidden;
+            background: rgba(255,255,255,.03); }
+  .bxwrap .flowsvg { position: absolute; inset: 0; }
+  /* the canvas is drawn, not read: dragging never highlights its text — the
+     box windows (foreign objects) keep their own selection, editors and all */
+  .bxwrap svg { user-select: none; -webkit-user-select: none; }
+  .bxwrap svg foreignObject, .bxwrap .bxlogpane,
+  .bxwrap .bxlogpane * { user-select: auto; -webkit-user-select: auto; }
+  .drect { fill: rgba(30,30,30,.97); stroke: rgba(255,255,255,.16); }
+  .dslot { fill: none; stroke: rgba(255,255,255,.28); stroke-dasharray: 3 3;
+           pointer-events: none; }
+  .dslothit { fill: transparent; pointer-events: all; }
+  .dnode.dropin .dslot { stroke: rgba(249,115,22,.9); }
+  .dnode:hover .drect { stroke: rgba(249,115,22,.8); }
+  /* a fill on the base class, so no kind of box can ever fall back to black */
+  .dtype { font: 600 10px var(--mono); fill: var(--ink-dim); }
+  .dtype.input, .dtype.output { fill: var(--ink-dim); }
+  .dtype.layer { fill: #e5e5e5; }
+  .dtype.act { fill: #fdba74; }
+  .dtype.op { fill: #fbbf24; }
+  .dtype.custom { fill: #fdba74; }
+  .dtype.script { fill: #fdba74; }
+  .dlabel { fill: var(--ink); font: 11.5px var(--mono); }
+  .dshape { fill: #fdba74; font: 600 10px var(--mono); text-anchor: end; }
+  .dstate { fill: #e5e5e5; opacity: .78; font: 600 10px var(--mono); }
+  .dstate.rev { fill: #f0a04b; opacity: 1; }
+  .dshape.lower { text-anchor: start; }
+  .dshape.fn { fill: #fdba74; }
+  .dshape.opfn { fill: #fbbf24; }
+  .bxcrumbs { position: absolute; left: 10px; top: 10px; z-index: 6; display: flex;
+              align-items: center; gap: 8px; background: rgba(16,16,16,.95);
+              border: 1px solid var(--panel-brd); border-radius: 10px; padding: 5px 9px; }
+  .bxsel { background: rgba(22,22,22,.9); color: var(--ink); border: 1px solid var(--panel-brd);
+           border-radius: 7px; padding: 3px 5px; font-size: 11.5px; }
+  .bxsel option { background: #1c1c1c; color: var(--ink); }
+  .dshape.unset { fill: var(--ink-faint); }
+  .dport { fill: rgba(22,22,22,.95); stroke: rgba(249,115,22,.8); cursor: crosshair; }
+  .dport.vis { pointer-events: none; }
+  .dport.hit { fill: transparent; stroke: none; pointer-events: all; cursor: crosshair; }
+  .dport.hit:hover { fill: rgba(249,115,22,.28); }
+  .dpop { fill: rgba(22,22,22,.95); stroke: rgba(249,115,22,.85);
+          pointer-events: none; }
+  .dpop.hit { fill: transparent; stroke: none; pointer-events: all;
+              cursor: pointer; }
+  .dpop.hit:hover { fill: rgba(249,115,22,.3); }
+  .drail { fill: transparent; pointer-events: all; cursor: crosshair; }
+  .drail:hover { fill: rgba(249,115,22,.16); }
+  .dedge { fill: none; stroke: rgba(235,235,235,.55); stroke-width: 1.6; }
+  .dedge.live { stroke: #fbbf24; stroke-dasharray: 4 3; }
+  .dedge.unknown { stroke: #8a8a8a; }
+  .dedge.hot { stroke: #fbbf24; stroke-width: 2.4; }
+  /* the data flow: a lit box, and light running along its wires */
+  .dnode.flow .drect { stroke: #fdba74; stroke-width: 2; }
+  /* the training signal: where the labels come from, and what they score */
+  .dnode.tsrc .drect { stroke: #86efac; stroke-width: 2; }       /* the data's home */
+  .dnode.ttest .drect { stroke: #93c5fd; stroke-width: 2; }      /* the hold-out */
+  .dnode.tscored .drect, .dnode.tpolicy .drect,
+  .dnode.tscorer .drect { stroke: #fbbf24; stroke-width: 2.2; }  /* the signal's head */
+  .dedge.tgrad { stroke: #86efac; stroke-width: 2; stroke-dasharray: 5 9;
+                 animation: bxflow .5s linear infinite reverse; } /* gradients run backward */
+  .dtag { font-size: 9px; font-weight: 700; text-anchor: end; }
+  .dtag.tsrc { fill: #86efac; }
+  .dtag.ttest { fill: #93c5fd; }
+  .dtag.tscored, .dtag.tpolicy, .dtag.tscorer { fill: #fbbf24; }
+  .dringbg { fill: none; stroke: #33383d; stroke-width: 4; }
+  .dring { fill: none; stroke: #fdba74; stroke-width: 4; stroke-linecap: round; }
+  .dringnum { fill: #c9c9c9; font-size: 8px; text-anchor: middle; }
+  /* the agent box's display: a real window inside the card (foreignObject) */
+  .bxlogfo { overflow: hidden; }
+  .bxlogpane { position: relative; width: 100%; height: 100%; display: flex;
+               flex-direction: column; background: #14171a; border: 1px solid #2a2f34;
+               border-radius: 8px; overflow: hidden; font-size: 12px; color: #c9ced3; }
+  /* the dataset box is a card like every other box; its sheet sits inset
+     inside the card as a flat grid of square block cells — straight lines
+     only, and a cell being edited keeps the square highlight, never a text
+     box */
+  .bxflat { border: 0 !important; border-radius: 0 !important; }
+  .bxsheet { overflow: auto; }
+  .bxdf { border-collapse: collapse; width: 100%; font-size: 11.5px;
+          table-layout: fixed; border-radius: 0; }
+  .bxdf th, .bxdf td {
+    border: 1px solid #2f353b; padding: 0; height: 22px;
+    border-radius: 0;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  }
+  .bxdf .bxcorner { background: #1b1f23; width: 34px; border-color: #262b30; }
+  .bxdf .bxname { background: #1b1f23; position: relative; padding: 0; }
+  .bxnamehost { display: flex; align-items: center; }
+  .bxnameslot { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .bxname .bxcolbtn { visibility: hidden; cursor: pointer; padding: 0 3px;
+                      color: #8a8a8a; font-family: var(--mono);
+                      font-size: 10px; font-weight: 600; }
+  .bxname:hover .bxcolbtn { visibility: visible; }
+  .bxname .bxcolbtn:hover { color: #f97316; }
+  .bxval { padding: 3px 6px; overflow: hidden; text-overflow: ellipsis;
+           white-space: nowrap; cursor: cell; color: #c9ced3;
+           font: 11.5px/1.6 var(--mono); }
+  .bxval.bxnum { text-align: right; }
+  .bxval.bxdim { color: #4b5563; }
+  .bxnameval { padding: 4px 6px; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; cursor: text; color: #e5e5e5;
+               font: 600 11px/1.5 var(--mono); }
+  .bxnameval.bxdim { color: #4b5563; font-weight: 400; }
+  .bxcolname, .bxcell {
+    width: 100%; height: 100%; border: 0; border-radius: 0;
+    background: rgba(249,115,22,.10); color: #e5e5e5;
+    font: 11.5px/1.6 var(--mono); padding: 3px 6px;
+    outline: none; appearance: none; -webkit-appearance: none; }
+  .bxcolname { font-weight: 600; }
+  .bxcolname:focus, .bxcell:focus { box-shadow: inset 0 0 0 2px #f97316; }
+  .bxdtype { position: absolute; right: 8px; top: 3px; font-size: 9px;
+             color: #6b7280; background: transparent;
+             padding: 0 4px; border: 0; border-left: 1px solid #2f353b;
+             cursor: pointer; font-family: var(--mono); border-radius: 0; }
+  .bxdtype:hover { color: #f97316; }
+  .bxcolgrip { position: absolute; right: -3px; top: 0; width: 7px; height: 100%;
+               cursor: col-resize; z-index: 2; }
+  .bxdf .bxrowno { background: #1b1f23; color: #6b7280; text-align: center;
+                   font-family: var(--mono); font-size: 10px; width: 34px;
+                   user-select: none; }
+  .bxdel { cursor: pointer; color: #6b7280; text-align: center; width: 22px; }
+  .bxdel:hover { color: #f87171; }
+  .bxthumb { max-height: 46px; max-width: 100%; display: block; cursor: zoom-in; }
+  .bxfile { color: #a3a3a3; font-family: var(--mono); font-size: 10px;
+            padding: 4px 6px; cursor: pointer; }
+  .bxfile:hover { color: #f97316; }
+  .bxlight { position: fixed; inset: 0; background: rgba(0,0,0,.82);
+             display: flex; align-items: center; justify-content: center;
+             z-index: 1000; cursor: zoom-out; }
+  .bxlight img, .bxlight video { max-width: 88vw; max-height: 84vh; }
+  .bxhint2 { padding: 3px 8px; color: #8a8a8a; font-size: 11px; }
+  .bxhint2.warn { color: #fbbf24; }
+  .bxlink { color: #a3a3a3; cursor: pointer; padding: 0 4px; }
+  .bxlink:hover { color: #f97316; }
+  .bxgrip { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+            cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 45%, #3b4248 45%,
+                        #3b4248 55%, transparent 55%, transparent 68%, #3b4248 68%,
+                        #3b4248 78%, transparent 78%); }
+  .bxgrip:hover { background: linear-gradient(135deg, transparent 45%, #fdba74 45%,
+                  #fdba74 55%, transparent 55%, transparent 68%, #fdba74 68%,
+                  #fdba74 78%, transparent 78%); }
+  .bxphead { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+             padding: 6px 8px; border-bottom: 1px solid #262b30; background: #171b1f; }
+  .bxptitle { color: #e6e9ec; font-weight: 600; margin-right: auto;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bxbbtn { padding: 2px 7px; border: 1px solid #343a40; border-radius: 6px;
+            color: #c9ced3; cursor: pointer; user-select: none; white-space: nowrap; }
+  .bxbbtn:hover { border-color: #fdba74; color: #fdba74; }
+  .bxbbtn.off { opacity: .45; cursor: default; }
+  .bxchip { padding: 1px 7px; border-radius: 999px; font-size: 11px;
+            border: 1px solid #343a40; color: #c9ced3; white-space: nowrap; }
+  .bxchip.running { border-color: #fdba74; color: #fdba74; }
+  .bxchip.paused { border-color: #fbbf24; color: #fbbf24; }
+  .bxchip.done { border-color: #86efac; color: #86efac; }
+  .bxchip.cancelled { border-color: #f87171; color: #f87171; }
+  .bxpbody { flex: 1; overflow: auto; padding: 6px 8px;
+             font-family: var(--mono); line-height: 1.45; }
+  .bxpitem { margin: 0 0 4px; }
+  .bxpsay { color: #d8dde2; white-space: pre-wrap; }
+  .bxpitem.note .bxpsay { color: #8a9199; }
+  .bxpdo { color: #fdba74; }
+  .bxpstep { color: #6b7280; }
+  .bxperr { color: #f87171; }
+  .bxpraw { margin: 3px 0 0; padding: 4px 6px; background: #0f1214; border-radius: 6px;
+            color: #9aa2aa; white-space: pre-wrap; overflow-x: auto; max-height: 160px; }
+  .bxprow { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+  .bxpform { border-top: 1px solid #262b30; padding: 6px 8px; }
+  .bxpform .rf { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .bxpform .rf span { color: #9aa2aa; min-width: 80px; }
+  .bxpfoot { padding: 4px 8px; border-top: 1px solid #262b30; color: #8a9199;
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* the AI agent canvas: a conversation where a drawing would be */
+  .bxtalk { position: absolute; inset: 0; z-index: 5; display: flex;
+            justify-content: center; background: #14171a; }
+  .bxtalkwrap { display: flex; flex-direction: column; width: 100%;
+                max-width: 900px; min-height: 0; }
+  .bxtalkbody { display: block; }
+  .bxtitem { margin: 0 0 12px; }
+  .bxtwho { color: var(--ink-faint); font: 10px var(--mono); letter-spacing: .08em;
+            text-transform: uppercase; margin: 0 0 3px; }
+  .bxtitem.you { border-left: 2px solid #343a40; padding-left: 9px; }
+  .bxtitem.you .bxtwho { color: #9aa2aa; }
+  .bxtitem.agent { border-left: 2px solid #3f3423; padding-left: 9px; }
+  .bxtitem.agent .bxtwho { color: var(--warm); }
+  .bxtsay { color: #e6e9ec; white-space: pre-wrap; }
+  .bxtalkfoot { display: flex; gap: 8px; align-items: flex-end;
+                border-top: 1px solid #262b30; padding: 8px; background: #171b1f; }
+  .bxtalkin { flex: 1 1 auto; min-height: 44px; max-height: 160px; resize: vertical;
+              background: #0f1214; border: 1px solid #343a40; border-radius: 8px;
+              color: #e6e9ec; padding: 7px 9px; font: 12px/1.5 var(--mono); }
+  .bxtalkin:focus { outline: none; border-color: #fdba74; }
+  .dnode.now .drect { stroke: #fef3c7; stroke-width: 2.6; }   /* where data is now */
+  .dedge.flow { stroke: #fdba74; stroke-width: 2.2; stroke-dasharray: 5 9;
+                animation: bxflow .5s linear infinite; }
+  @keyframes bxflow { to { stroke-dashoffset: -14; } }
+  /* a run's error: the block the backend blamed */
+  .dnode.runerr .drect { stroke: #f87171; stroke-width: 2.4;
+                         animation: bxerrpulse .9s ease-in-out infinite alternate; }
+  /* a connection the audit blamed: box, and every block on the way down */
+  .dnode.audit .drect { stroke: #fbbf24; stroke-width: 2.2; stroke-dasharray: 6 3; }
+  .dstate.err { fill: #f87171; opacity: 1; }
+  @keyframes bxerrpulse { from { opacity: 1; } to { opacity: .55; } }
+  .dnode.sel .drect { stroke: rgba(249,115,22,1); stroke-width: 2; }
+  .dnode.err .drect { stroke: #f87171; stroke-dasharray: 5 4; }
+  .dnode.dropin .drect { stroke: #fdba74; stroke-dasharray: 4 3; }
+  .bxguide { stroke: #fbbf24; stroke-width: 1; stroke-dasharray: 5 4; opacity: .85;
+             pointer-events: none; }
+  .bxmarquee { fill: rgba(249,115,22,.10); stroke: rgba(249,115,22,.85);
+               stroke-dasharray: 5 4; pointer-events: none; }
+  /* the canvas grid: world-space lines behind the design, hairlines at any zoom */
+  .bxgrid path { fill: none; stroke-width: 1; }
+  .bxgrid .gminor { stroke: rgba(255,255,255,.05); }
+  .bxgrid .gmajor { stroke: rgba(255,255,255,.09); }
+  .dnode.dropin .drail { stroke: rgba(253,186,116,.8); }
+  .dnode.err .drail { stroke: rgba(248,113,113,.75); }
+  .dnode.off { opacity: .42; }
+  .dnode.off .drect { stroke-dasharray: 5 4; }
+  .dfroz { stroke: #cbd5e1; stroke-width: 1.5; }
+  .dnode.warn .drect { stroke: #fbbf24; stroke-dasharray: 5 4; }
+  .dnode.warn .drail { stroke: rgba(251,191,36,.75); }
+  .dwarn2 { fill: #fbbf24; font: 700 12px var(--mono); text-anchor: end; }
+  .dport.doff { stroke: rgba(138,138,138,.6); stroke-dasharray: 2 2; }
+  .dport.dstarved { stroke: #fbbf24; }
+  .dwarn { fill: #f87171; font: 700 12px var(--mono); text-anchor: end; }
+  /* where a weight box was told to sit: gpu = the orange accent, the system = quiet */
+  .dplace { fill: var(--ink-dim); font: 600 9.5px var(--mono); text-anchor: end; }
+  .dplace.gpu { fill: #fdba74; }
+  .dplace.sys { fill: #e5e5e5; opacity: .72; }
+  .dedge.sel { stroke: #fdba74; stroke-width: 2.4; }
+  .dedge.bad { stroke: #f87171; stroke-dasharray: 5 4; }
+  .dedge.off { stroke: rgba(138,138,138,.55); stroke-dasharray: 1 5; }
+
+  .dedge-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+  .dedge-hit:hover { stroke: rgba(249,115,22,.16); }
+  .bxdel circle { fill: rgba(24,24,24,.96); stroke: #fca5a5; }
+  .bxdel text { fill: #fca5a5; font: 600 12px var(--mono); text-anchor: middle; }
+  .bxdel { cursor: pointer; }
+  .bxmenu { position: absolute; z-index: 8; min-width: 168px; padding: 4px;
+            background: rgba(20,20,20,.98); border: 1px solid var(--panel-brd);
+            border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+  .bxmenu[hidden] { display: none; }
+  .bxtip { position: absolute; z-index: 7; max-width: 260px; padding: 6px 9px;
+           background: rgba(20,20,20,.98); border: 1px solid var(--panel-brd);
+           border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.45);
+           pointer-events: none; }
+  .bxtip[hidden] { display: none; }
+  .bxtoast { position: absolute; z-index: 8; top: 10px; left: 50%;
+             transform: translateX(-50%); max-width: 72%; padding: 6px 11px;
+             background: rgba(40,22,14,.98); border: 1px solid rgba(249,115,22,.55);
+             border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.45);
+             font: 11.5px var(--mono); color: var(--ink); pointer-events: none; }
+  .bxtoast[hidden] { display: none; }
+  .bxtip .who  { font: 10.5px var(--mono); color: var(--ink-faint); }
+  .bxtip .what { font: 11.5px var(--mono); color: var(--ink); }
+  .bxtip .shp  { font: 11px var(--mono); color: var(--ink-dim); }
+  .bxtip .row  { font: 11px var(--mono); color: var(--ink-dim); }
+  .bxtip .note { font: 10.5px var(--mono); color: var(--ink-faint); }
+  .bxmat { display: block; width: 100%; min-height: 52px; max-height: 140px;
+           resize: vertical; padding: 6px 8px; border-radius: 8px;
+           border: 1px solid var(--panel-brd); background: rgba(0,0,0,.3);
+           color: var(--ink); font: 11.5px/1.55 var(--mono); }
+  .bxmat:focus { outline: none; border-color: rgba(249,115,22,.55); }
+  .bxmenu .bf .bxmat { width: 340px; max-width: 48vw; height: 78px; }
+  .panehint.bad { color: #fca5a5; }
+  .bxmenu .mi { display: block; padding: 5px 9px; border-radius: 7px; cursor: pointer;
+                font: 12px var(--ink); font-family: inherit; color: var(--ink); }
+  .bxmenu .mi:hover { background: rgba(255,255,255,.07); }
+  .mhead { font: 600 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase;           color: var(--ink-faint); padding: 7px 9px 2px; }
+  .mhead:not(:first-child) { border-top: 1px solid rgba(255,255,255,.07);
+                             margin-top: 4px; }
+  /* the add menu's categories: a header that drops down into its items */
+  .mhead.drop { display: flex; align-items: center; gap: 6px; cursor: pointer;
+                padding-bottom: 5px; }
+  .mhead.drop:hover { color: var(--ink); background: rgba(255,255,255,.05); }
+  .mhead.drop .chev { margin-left: auto; color: var(--ink-faint); }
+  .mhead.drop.on { color: var(--ink-dim); }
+  .bxmenu .bf { display: flex; flex-direction: column; gap: 6px; padding: 6px; }
+  .bxmenu .bf input.wide { min-width: 260px; }
+  /* the tensor picker: one row per tensor in the file */
+  .wlist { max-height: 190px; overflow: auto; display: flex; flex-direction: column; gap: 1px; }
+  .wten { padding: 3px 7px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; }
+  .wten:hover { background: rgba(255,255,255,.04); }
+  .wten.on { border-color: rgba(253,186,116,.7); background: rgba(253,186,116,.09); }
+  .wten .wn { font: 11px/1.4 var(--mono); color: var(--ink); overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap; }
+  .wten .wd { font: 10px/1.4 var(--mono); color: var(--ink-dim); }
+  .wten.hit .wn { color: #fdba74; }
+  .bxmenu .bf label { display: flex; align-items: center; justify-content: space-between;
+                      gap: 8px; font-size: 11.5px; color: var(--ink-dim); }
+  .bxmenu .bf input { width: 92px; }
+  .bxmenu .bf.bximp { min-width: 340px; }
+  .bxmenu .bf.bximp select { flex: 1 1 auto; min-width: 0; }
+  .bxmenu .bf .row { display: flex; gap: 6px; justify-content: flex-end; }
+  /* the account dialogs: a username, Cloudflare's widget, the token shown once */
+  .bxmenu .bf.bxacct { min-width: 340px; max-width: 440px; }
+  .bxmenu .bf.bxacct input[type="text"],
+  .bxmenu .bf.bxacct input[type="password"] { width: 100%; border-radius: 0;
+    padding: 7px 9px; font: 12.5px var(--mono); }
+  /* the bot check sits in the middle of the dialog, not off to one side */
+  .bxmenu .bf.bxacct .bxcf { display: flex; justify-content: center; padding: 8px 0; }
+  .bxmenu .bf.bxacct textarea.bxtok { width: 100%; height: 56px; min-height: 0; border-radius: 0;
+    font: 12px/1.5 var(--mono); word-break: break-all; }
+  .bxmenu .bf.bxacct .bxlist { display: flex; flex-direction: column; gap: 4px;
+    max-height: 220px; overflow: auto; margin: 2px 0; }
+  .bxmenu .bf.bxacct .bxlist .rowl { display: flex; align-items: center; gap: 8px;
+    padding: 5px 7px; border: 1px solid var(--panel-brd); cursor: pointer;
+    background: rgba(0,0,0,.25); }
+  .bxmenu .bf.bxacct .bxlist .rowl:hover { background: rgba(255,255,255,.06); }
+  .bxmenu .bf.bxacct .bxlist .rowl .nm { flex: 1 1 auto; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .bxmenu .bf.bxacct .bxlist .rowl .dt { color: var(--ink-faint); font: 11px var(--mono); }
+  .bxmenu .bf.bxacct .bxlist .rowl .rm { color: var(--ink-faint); padding: 0 4px; }
+  .bxmenu .bf.bxacct .bxlist .rowl .rm:hover { color: #fca5a5; }
+  .bxtmi.dim { color: var(--ink-faint); cursor: default; }
+  .bxtmi.dim:hover { background: transparent; }
+  .bxmenu .bf textarea.bxjson { width: 340px; max-width: 48vw; height: 168px; max-height: 42vh; resize: vertical;
+                                background: rgba(22,22,22,.9); color: var(--ink);
+                                border: 1px solid var(--panel-brd); border-radius: 7px;
+                                padding: 6px 8px; font: 11px/1.5 var(--mono);
+                                white-space: pre; overflow: auto; }
+  .bxmenu .bf textarea.bxjson:focus { outline: none; border-color: rgba(249,115,22,.55); }
+  .bxmenu .bf textarea.bxjson.bad { border-color: #f87171; box-shadow: 0 0 0 1px rgba(248,113,113,.55); }
+  .bxmenu .bf .warnbx { color: #fca5a5; font-size: 11px; line-height: 1.45; padding: 6px 8px;
+                        border: 1px solid rgba(248,113,113,.45); border-radius: 7px;
+                        background: rgba(248,113,113,.08); }
+  /* the choices live in the prompt: chips over the box + a token popup */
+  .rawwrap { position: relative; }
+  h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  input[type="text"], textarea {
+    width: 100%; color: var(--ink);
+    background: rgba(0,0,0,.35);
+    border: 1px solid var(--panel-brd);
+    border-radius: 12px;
+    padding: 11px 13px;
+    font: inherit;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input[type="text"]:focus, textarea:focus {
+    border-color: rgba(249,115,22,.65);
+    box-shadow: 0 0 0 3px rgba(249,115,22,.18);
+  }
+  textarea { resize: vertical; min-height: 96px; font-family: var(--mono); font-size: 13.5px; }
+  /* locked while an Until run steps through the text (dark theme would
+     otherwise gray disabled fields into unreadability) */
+  input[type="text"]:disabled, textarea:disabled {
+    color: var(--ink-dim); opacity: .8; cursor: progress;
+  }
+  .row { display: flex; align-items: center; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+  .row label, .row .lbl { color: var(--ink-dim); font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .chip {
+    cursor: pointer; font-size: 12.5px; color: var(--ink-dim);
+    border: 1px solid var(--panel-brd); background: rgba(0,0,0,.25);
+    padding: 6px 12px; border-radius: 999px;
+    transition: all .15s;
+    user-select: none;
+  }
+  .chip:hover { color: var(--ink); border-color: rgba(249,115,22,.55); background: rgba(249,115,22,.12); }
+  .chip.tiny { padding: 3px 9px; font-size: 11.5px; font-family: var(--mono); }
+  .chip.tiny:hover { color: var(--warm); border-color: rgba(251,191,36,.5); background: rgba(251,191,36,.10); }
+  .chip.act { color: var(--accent2); border-color: rgba(253,186,116,.5); background: rgba(253,186,116,.1); }
+  /* the Run box's run action: a green play button, and the outcome line */
+  .chip.play { color: #07240f; background: #22c55e; border-color: #22c55e; font-weight: 600; }
+  .chip.play:hover { color: #07240f; background: #16a34a; border-color: #16a34a; }
+  .chip.off { color: var(--ink-faint); background: rgba(0,0,0,.28);
+              border-color: var(--panel-brd); }
+  .chip.off:hover { color: var(--ink-faint); background: rgba(0,0,0,.28);
+                    border-color: var(--panel-brd); }
+  .chip.play.off { color: var(--ink-faint); background: rgba(255,255,255,.06);
+                   border-color: var(--panel-brd); font-weight: 400; }
+  .chip.play.off:hover { color: var(--ink-faint); background: rgba(255,255,255,.06);
+                         border-color: var(--panel-brd); }
+  .runok { color: #4ade80; }
+  .runbad { color: var(--err); }
+  button.go {
+    cursor: pointer; border: none; border-radius: 12px; padding: 10px 18px;
+    font: 600 14px system-ui; color: white;
+    background: linear-gradient(135deg, var(--accent), #fbbf24 55%, var(--accent2));
+    background-size: 180% 180%;
+    transition: transform .12s, box-shadow .12s, background-position .3s;
+    box-shadow: 0 8px 24px -10px rgba(249,115,22,.55);
+  }
+  button.go:hover { transform: translateY(-1px); background-position: 100% 0; }
+  button.go:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+  button.go.busy { cursor: wait; }
+  kbd {
+    font-family: var(--mono); font-size: 10.5px; color: rgba(255,255,255,.75);
+    border: 1px solid rgba(255,255,255,.3); border-radius: 5px; padding: 1px 5px; margin-left: 6px;
+  }
+  .panehint { font-size: 11.5px; color: var(--ink-faint); }
+  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .toolbar .tlabel { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .12em; margin-right: 2px; }
+  #raw { min-height: 340px; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #token {
+    font-family: var(--mono); font-size: clamp(26px, 5vw, 44px); font-weight: 600;
+    word-break: break-all; text-align: center;
+    animation: pop .35s cubic-bezier(.2,.9,.3,1.4);
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.97); } }
+  .meta {
+    position: absolute; right: 14px; bottom: 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  }
+  .stat {
+    flex: 1 1 120px; min-width: 110px;
+    border: 1px solid var(--panel-brd); border-radius: 12px; padding: 10px 14px;
+    background: rgba(0,0,0,.25);
+  }
+  .stat b { display: block; font-family: var(--mono); font-size: 16px; }
+  .stat span { font-size: 11.5px; color: var(--ink-dim); letter-spacing: .04em; }
+  .empty { color: var(--ink-faint); font-size: 13.5px; margin-top: 14px; text-align: center; }
+  .error {
+    margin-top: 14px; border: 1px solid rgba(248,113,113,.4); background: rgba(248,113,113,.09);
+    color: #fca5a5; border-radius: 12px; padding: 12px 16px; font-size: 13.5px;
+    font-family: var(--mono); overflow-x: auto; white-space: pre-wrap;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+/* nnstudio: the canvas is the whole app — no tabs, no panels, and the page
+   itself never scrolls: the body is a fixed viewport, the canvas row takes
+   what is left, the palette scrolls inside its own column and the canvas
+   pans and zooms in place */
+html, body { height: 100%; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+main { max-width: none; margin: 0; padding: 6px 14px 14px; flex: 1 1 auto;
+       min-height: 0; display: flex; }
+header { padding: 18px 16px 10px; flex: 0 0 auto; }
+.view { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+        position: relative; }
+/* the boot veil: while a remembered key's session is on its way, so no ghost
+   blank canvas shows for a moment before the saved tabs land */
+.bxsplash { position: absolute; inset: 0; z-index: 60; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            gap: 14px; background: rgba(12,12,12,.88); }
+.bxsplash[hidden] { display: none; }
+.bxspin { width: 26px; height: 26px; border: 2px solid var(--panel-brd);
+          border-top-color: var(--accent); border-radius: 50%;
+          animation: bxspin .9s linear infinite; }
+@keyframes bxspin { to { transform: rotate(360deg); } }
+.bxsplashnote { font: 12px var(--mono); color: var(--ink-dim); }
+.bxrow { flex: 1 1 auto; min-height: 0; height: auto; }
+/* the canvas toolbar: a reserved strip above the canvas — export/import of
+   the design as JSON for now, room for later tools on the right */
+.bxtools { position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+           height: 36px; border: 1px solid var(--panel-brd); border-radius: 0;
+           background: var(--panel); padding: 0 10px; margin: 0 0 10px; font-family: var(--mono); }
+.bxtbtn { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--ink-dim);
+          border: 1px solid var(--panel-brd); border-radius: 0;
+          padding: 3px 12px; background: rgba(0,0,0,.25); user-select: none; }
+.bxtbtn:hover { color: var(--ink); border-color: rgba(249,115,22,.6); }
+.bxtbtn.off { opacity: .4; cursor: default; }
+.bxtbtn.off:hover { color: var(--ink-dim); border-color: var(--panel-brd); }
+/* the Train box's door lives in the Backend menu: a row, and dim when the
+   box is not on the canvas */
+.bxtmi.off { opacity: .55; }
+.bxtdrop { position: absolute; top: 32px; left: 10px; z-index: 40; min-width: 158px; padding: 4px;
+           max-height: 76vh; overflow-y: auto;
+           background: rgba(20,20,20,.98); border: 1px solid var(--panel-brd);
+           border-radius: 0; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+.bxtdrop[hidden] { display: none; }
+.bxtdrop-r { left: auto; right: 10px; }
+#bxtVramMenu { min-width: 268px; }
+#bxtVramMenu .bxvram { border: 0; background: transparent; padding: 0; }
+/* the Backend menu: Local (connect a computer of your own) or Remote (Modal,
+   bring your own key) — the choice is remembered */
+#bxtBackendMenu { min-width: 322px; }
+#bxtBackendMenu .bxton { color: var(--accent); }
+.bxbpane { display: flex; flex-direction: column; gap: 6px; padding: 6px 8px 4px;
+           border-top: 1px solid rgba(255,255,255,.07); margin-top: 4px; }
+.bxbhint { font-size: 11.5px; line-height: 1.45; color: var(--ink-dim); }
+.bxbcode { margin: 0; font: 11px/1.5 var(--mono); color: var(--ink);
+           background: rgba(0,0,0,.3); border: 1px solid var(--panel-brd);
+           border-radius: 6px; padding: 6px 8px; white-space: pre-wrap; }
+.bxtdrop .rrow, .bxrunbody .rrow, .runfoot .rrow, .bxinputbody .rrow {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* the input's run action: a footer with air under it, so the button never
+   touches the box's bottom edge (the corner grip keeps its room too) */
+.bxlogpane .runfoot { display: flex; flex-direction: column; align-items: flex-start;
+                      gap: 4px; padding: 6px 0 12px; }
+.bxtdrop .bxbin, .bxrunbody .bxbin { flex: 1 1 120px; min-width: 0; background: rgba(0,0,0,.3); color: var(--ink);
+                  border: 1px solid var(--panel-brd); border-radius: 6px;
+                  padding: 4px 7px; font: 12px var(--mono); }
+/* spec rows: what the agent reports, and what a run came back with */
+.bxbspec { display: flex; justify-content: space-between; gap: 12px;
+           font: 11px/1.5 var(--mono); color: var(--ink-dim); }
+.bxbspec b { color: var(--ink); font-weight: 600; text-align: right; }
+.bxrunbody label.rf { display: flex; align-items: center; gap: 6px;
+                      font-size: 12px; color: var(--ink-dim); }
+.bxrunbody input.bxoff { flex: 1; min-width: 96px; accent-color: var(--accent);
+                         height: 16px; }
+.bxrunbody .wmode { margin-left: auto; font: 11px var(--mono); color: var(--ink-dim); }
+/* the Run box's window: the machine, the weights, the feeds, the readout */
+.bxrunbody { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex;
+             flex-direction: column; }
+/* the input box's own editor, in the box */
+.bxinputbody { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex;
+               flex-direction: column; gap: 4px; padding: 2px 0; }
+.bxinputbody label.rf { display: flex; align-items: center; gap: 6px;
+                        font-size: 12px; color: var(--ink-dim); }
+.bxinputbody label.rf span { min-width: 46px; }
+.bxinputbody .bxsel { flex: 1 1 auto; min-width: 0; padding: 3px 6px;
+                      border-radius: 8px; font: 12px var(--mono); }
+.bxoutimg { display: block; max-width: 100%; margin: 6px 0;
+            border-radius: 8px; border: 1px solid var(--panel-brd); }
+.bxdrop { display: block; margin: 6px 0; padding: 10px 8px; text-align: center;
+          border: 1px dashed var(--panel-brd); border-radius: 10px;
+          background: rgba(0,0,0,.18); cursor: pointer; }
+.bxdrop:hover, .bxdrop.over { border-color: rgba(249,115,22,.55);
+                              background: rgba(249,115,22,.06); }
+.bxdropimg { display: block; max-width: 100%; max-height: 240px; margin: 0 auto 6px;
+             border-radius: 8px; }
+.bxdropmsg { font: 12px var(--mono); color: var(--ink-dim); line-height: 1.5; }
+.bxdropmsg.faint { color: var(--ink-faint); }
+.bxdropmsg.bad { color: #fca5a5; }
+.bxdroprow { display: flex; gap: 6px; justify-content: center; }
+.bxinputbody input[type="text"] {
+  flex: 1 1 auto; min-width: 0; width: auto; padding: 4px 8px;
+  border-radius: 8px; font: 12px var(--mono);
+  background: rgba(0,0,0,.3); color: var(--ink); border: 1px solid var(--panel-brd);
+}
+.bxinputbody textarea {
+  width: 100%; min-height: 52px; padding: 4px 8px; border-radius: 8px;
+  font: 12px var(--mono); background: rgba(0,0,0,.3); color: var(--ink);
+  border: 1px solid var(--panel-brd); resize: none;
+}
+/* the data a box shows (the output's readout): plain, selectable numbers */
+.bxdata { font: 12px/1.6 var(--mono); color: #e5e5e5; white-space: pre-wrap;
+          word-break: break-word; }
+/* a matrix reads as a grid when it is up to 2-D: cells with their rows and
+   columns numbered, and a sideways scroll when the row runs long */
+.peekwrap { overflow-x: auto; padding: 2px 0; }
+.peekgrid { display: grid; gap: 3px 4px; font: 11px var(--mono); width: max-content; }
+.peekgrid .pc { text-align: right; background: rgba(0,0,0,.22);
+                border: 1px solid var(--panel-brd); border-radius: 4px;
+                padding: 1px 5px; white-space: nowrap; color: var(--ink); }
+.peekgrid .ph { color: var(--ink-faint); text-align: center; padding: 0 2px; }
+.peekgrid .pi { color: var(--ink-faint); text-align: right; padding: 1px 2px; }
+.peekgrid .pmore { color: var(--ink-faint); border-style: dashed; }
+/* the Run box's own menu: Execute (the run) and Spec (the backend) */
+.runmenu { display: flex; gap: 2px; padding: 2px 4px 0;
+           border-bottom: 1px solid var(--panel-brd); }
+.bxtmi { display: block; padding: 5px 9px; border-radius: 0; cursor: pointer;
+         font: 12px var(--mono); color: var(--ink); white-space: nowrap; }
+.bxtmi:hover { background: rgba(255,255,255,.07); }
+/* the session list's note sits below the list; the shell rules below draw it */
+/* the Palette menu: its categories, expanding into the box cards themselves */
+#bxtPalMenu { min-width: 384px; }
+.bxtcat { display: flex; align-items: center; gap: 6px; cursor: pointer;
+          padding: 6px 9px; border-radius: 7px;
+          font: 600 10px var(--mono); letter-spacing: .09em; text-transform: uppercase;
+          color: var(--ink-dim); }
+.bxtcat:hover { background: rgba(255,255,255,.06); color: var(--ink); }
+.bxtcat .chev { margin-left: auto; color: var(--ink-faint); }
+.bxtcards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 6px 8px;
+            border-bottom: 1px solid rgba(255,255,255,.06); }
+.bxpalitem { cursor: grab; border-radius: 10px; }
+.bxpalitem:hover { background: rgba(255,255,255,.05); }
+.bxpalcard { display: block; }
+.bxghost { position: fixed; z-index: 30; width: 176px; opacity: .9; pointer-events: none; }
+.bxghost.over { outline: 1px dashed rgba(249,115,22,.85); outline-offset: 4px;
+                border-radius: 10px; }
+/* nnstudio: the grey · white · orange finish — neutral greys, white ink,
+   one orange that means "interactive" */
+::selection { background: rgba(249,115,22,.32); }
+html { color-scheme: dark; }
+:focus-visible { outline: 2px solid rgba(249,115,22,.6); outline-offset: 1px; border-radius: 6px; }
+  /* …except the dataset's cells: their editors stay square blocks */
+  .bxcell:focus-visible, .bxcolname:focus-visible { border-radius: 0; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); border-radius: 8px;
+                            border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(249,115,22,.6); border: 2px solid transparent;
+                                  background-clip: content-box; }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.18) transparent; }
+header { max-width: none; margin: 0; padding: 18px 16px 14px;
+         border-bottom: 1px solid rgba(255,255,255,.06); }
+.bxwrap, .bxtools { box-shadow: inset 0 1px 0 rgba(255,255,255,.03); }
+.drect { transition: stroke .15s; }
+.bxtmi:hover { background: rgba(255,255,255,.07); }
+.chip, .bxtbtn, .mode { transition: color .15s, border-color .15s, background .15s, opacity .15s; }
+

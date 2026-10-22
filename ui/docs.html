@@ -231,8 +231,8 @@
     a jump needs no mouse. The chevron in the sidebar's head folds it to a
     rail of icons, and the fold is remembered for an account (a guest starts
     fresh). The top bar — the brand, Settings, and the account — is the same in both
-    halves. The head row carries the <b>Chat | Studio</b> switch, next to
-    <b>Chat Kitsui</b> in a chat and at the canvas head in Studio; it appears
+    halves. The head row carries the <b>Chat | Studio</b> switch in the same
+    centred slot in both halves, with the mode's controls to its right; it appears
     with the first session (the welcome itself has no switch). The switch is
     the crossing: it swaps only the main area, a
     canvas opens the chat it belongs to (or gains one — a session is a chat
@@ -265,16 +265,14 @@
         config, and the two signals it can use: a loss box and a reward box),
         <b>Analysis</b> (the heatmap) and <b>AI</b> (the agent). The canvas's
         right-click menu is the same nine shelves.</li>
-    <li><b>Bring a model in</b> — <span class="pill grey">Import ▾</span>
-        offers two doors: <b>GGUF model …</b> and
-        <b>Hugging Face model …</b> (a repo — a model box lands with its
-        text pipeline inside). The GGUF door opens one pop-up with the machine's
-        <code>.gguf</code> files, each recognized by its own header. Importing
-        adds <b>one nested box</b> with the file's structure inside — a model
-        its blocks, a vision encoder (<code>mmproj</code>, shown as such) its
-        tower. It never makes a canvas and never adds boundary boxes: the rest of
-        your design stays exactly as it is, and cancelling leaves it untouched
-        too.</li>
+    <li><b>Load a model</b> — <span class="pill grey">Load model</span> in the
+        Studio toolbar takes a Hugging Face repo id/URL or a local diffusers
+        folder. The model agent reads the config and tensor headers, proves the
+        architecture it can mirror, and lands <b>one Model box</b> on the
+        canvas. It refuses a repo it cannot prove rather than making a blind
+        canvas. The first slice covers exact text-model specs and diffusers
+        <code>UNet2DConditionModel</code>; diffusers transformer/DiT pipelines
+        and full diffusion sampling are next.</li>
     <li><b>Add training data</b> — an <span class="pill">input</span> box
         whose <b>data</b> dropdown reads <code>dataset</code>: its window is the
         sheet itself, cells and all. The Palette's <b>Data</b> shelf keeps the
