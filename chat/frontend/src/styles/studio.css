@@ -657,7 +657,10 @@ li.done .app-plan-check {
   margin: 14px 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 0 4px;
+  /* KaTeX paints tall delimiters and limits a little outside the line box;
+     keep enough room above and below so the scrollable display box never
+     crops the formula. */
+  padding: 8px 0 8px;
 }
 
 /* Inline maths: KaTeX's superscripts and fractions reach above the line box and collided with the line above.

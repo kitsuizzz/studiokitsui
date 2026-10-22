@@ -15,6 +15,11 @@
   flex-direction: column;
   overflow-y: auto;
   padding: 0 var(--wall-pad);
+  /* A line caught at the top of the scrollport otherwise shows its upper half
+     sheared off. Fade the first few pixels into the wall instead of cutting
+     it: the reader still sees there is more above, without a sliced glyph. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
 }
 
 .wall > * {
