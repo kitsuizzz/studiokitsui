@@ -13,7 +13,7 @@
  *
  * The bundle is built by tests/run.sh. Standalone:
  *   cd <repo>
- *   studio/frontend/node_modules/.bin/esbuild studio/frontend/src/lib/canvasLink.ts \
+ *   chat/frontend/node_modules/.bin/esbuild chat/frontend/src/lib/canvasLink.ts \
  *     --bundle --platform=node --format=cjs --define:import.meta.env.BASE_URL='"/chat/"' \
  *     --outfile=/tmp/nnstudio_canvas_link_bundle.cjs
  *   node tests/canvas_link_test.js
@@ -74,7 +74,7 @@ globalThis.fetch = async (url) => {
 const BUNDLE = "/tmp/nnstudio_canvas_link_bundle.cjs";
 if (!fs.existsSync(BUNDLE)) {
   console.log("canvas_link_test: " + BUNDLE + " is missing — tests/run.sh builds it; or:");
-  console.log("  studio/frontend/node_modules/.bin/esbuild studio/frontend/src/lib/canvasLink.ts \\");
+  console.log("  chat/frontend/node_modules/.bin/esbuild chat/frontend/src/lib/canvasLink.ts \\");
   console.log('    --bundle --platform=node --format=cjs --define:import.meta.env.BASE_URL=\'"/chat/"\' \\');
   console.log("    --outfile=" + BUNDLE);
   process.exit(1);
@@ -129,7 +129,7 @@ const KEY = "ast_" + "a".repeat(43);
 
   await check("the digest is the boxes with their key settings, then the wiring", () => {
     ok(link.summarizeCanvas(small) ===
-      "Boxes:\n  in (embed) vocab set, din=4\n  out (output) din=4, trains\nWiring:\n  in → out",
+      "Boxes:\n  in [a] (embed) vocab set, din=4\n  out [b] (output) din=4, trains\nWiring:\n  in → out",
       "the digest drifted: " + JSON.stringify(link.summarizeCanvas(small)));
   });
 
@@ -148,13 +148,19 @@ const KEY = "ast_" + "a".repeat(43);
       "the cut or its note drifted: " + JSON.stringify(link.summarizeCanvas(big, 300)));
   });
 
-  await check("the tool the agent gets: read_canvas, read-only, no parameters", () => {
+  await check("the tools the agent gets: live read_canvas, approved edit_canvas", () => {
     const t = link.READ_CANVAS_TOOL;
     ok(t && t.type === "function" && t.function && t.function.name === "read_canvas",
-      "the tool's shape drifted: " + JSON.stringify(t));
-    ok(/read-only/.test(t.function.description), "the tool no longer says it is read-only");
+      "the read tool's shape drifted: " + JSON.stringify(t));
+    ok(/live/.test(t.function.description), "the read tool no longer says it reads the live canvas");
     eql(t.function.parameters, { type: "object", properties: {} },
-      "the tool takes no parameters: " + JSON.stringify(t.function.parameters));
+      "the read tool takes no parameters: " + JSON.stringify(t.function.parameters));
+    const e = link.EDIT_CANVAS_TOOL;
+    ok(e && e.type === "function" && e.function && e.function.name === "edit_canvas",
+      "the edit tool's shape drifted: " + JSON.stringify(e));
+    ok(e.function.parameters && e.function.parameters.properties &&
+       e.function.parameters.properties.ops,
+      "the edit tool lost its ops: " + JSON.stringify(e.function.parameters));
   });
 
   await check("an unbound session answers with the note, and never reaches the store", async () => {

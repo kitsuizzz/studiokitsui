@@ -13,8 +13,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import nn_arc      # noqa: E402
-import nn_tasks    # noqa: E402
+from app import arc as nn_arc      # noqa: E402
+from app import tasks as nn_tasks    # noqa: E402
 
 FAILED = []
 
@@ -201,7 +201,7 @@ check("a deleted task keeps its log unless purged", deleting_keeps_the_log_unles
 
 
 def the_audit_ignores_agent_boxes():
-    import nn_engine
+    from app import design as nn_engine
     c = {"type": "canvas", "version": 1,
          "nodes": [{"id": "i", "kind": "input", "name": "x", "x": 0, "y": 0, "dout": 2},
                    {"id": "ag", "kind": "agent", "name": "agent", "x": 160, "y": 0},

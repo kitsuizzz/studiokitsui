@@ -9,7 +9,7 @@
 #                                       #   must trust the new ca.crt again)
 #
 # Writes .certs/ca.crt (the authority — trust this one file on every device you
-# browse from) and .certs/server.crt + .certs/server.key (what nn_server
+# browse from) and .certs/server.crt + .certs/server.key (what app/server.py
 # serves). The directory is git-ignored and the keys are 0600. The certificate
 # answers to localhost, this host's name, every address the machine holds, and
 # whatever you name on the command line.

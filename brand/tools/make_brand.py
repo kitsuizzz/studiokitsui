@@ -21,15 +21,17 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from urllib.parse import quote
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BRAND = os.path.join(ROOT, "brand")
 CACHE = os.path.join(BRAND, "tools", "cache")
-NNSTUDIO_UI = os.path.join(ROOT, "ui", "index.html")
+NNSTUDIO_UI = os.path.join(ROOT, "ui", "src", "index.html")
+NNSTUDIO_CSS = os.path.join(ROOT, "ui", "src", "css", "30-brand.css")
 DOCS = os.path.join(ROOT, "ui", "docs.html")
-CHAT = os.path.join(ROOT, "studio", "frontend")
+CHAT = os.path.join(ROOT, "chat", "frontend")
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 "
     "(KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -392,7 +394,7 @@ def main():
         NNSTUDIO_UI, "<!-- brand:favicon -->", "<!-- /brand:favicon -->", favicon_link()
     )
     sync(
-        NNSTUDIO_UI,
+        NNSTUDIO_CSS,
         "/* brand:css */",
         "/* /brand:css */",
         brand_css("var(--s-text)", "var(--s-dot)", width),
@@ -404,7 +406,7 @@ def main():
         favicon_link(),
     )
     sync(
-        os.path.join(CHAT, "src", "index.css"),
+        os.path.join(CHAT, "src", "styles", "base.css"),
         "/* brand:css */",
         "/* /brand:css */",
         brand_css("var(--text)", "var(--dot)", width),
@@ -415,6 +417,11 @@ def main():
     )
     if args.previews:
         previews(d1, d2, width)
+    # The shell page is generated from ui/src: rebuild it so the logo and its
+    # stylesheet land in the one file the server actually serves.
+    subprocess.run(
+        [sys.executable, os.path.join(ROOT, "tools", "build_ui.py")], check=True
+    )
     print("make_brand: the logo kit is written, and both UIs carry it")
 
 

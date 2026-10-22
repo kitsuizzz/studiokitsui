@@ -1,0 +1,476 @@
+/* ─── Shared primitives, the session sidebar, and the running head. ──── */
+/* ---------- Shared primitives ---------- */
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  vertical-align: middle;
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.dot.static {
+  animation: none;
+}
+
+.tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 5;
+  white-space: nowrap;
+  background: var(--text);
+  color: var(--wall);
+  font: 11.5px var(--font-mono);
+  padding: 6px 9px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.text-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.text-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--hairline-2);
+  margin: 0;
+  padding: 0 14px 1px 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  outline: 0;
+}
+
+.text-select select:hover {
+  border-bottom-color: var(--label);
+}
+
+.text-select select:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.text-select::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid var(--label-2);
+  border-bottom: 1px solid var(--label-2);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--hairline-2);
+  padding: 0 0 1px;
+  font: inherit;
+  color: var(--label);
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  color: var(--text);
+  border-bottom-color: var(--label);
+}
+
+.text-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.text-btn.danger {
+  color: var(--danger);
+  border-bottom-color: var(--danger);
+}
+
+.icon-text-btn {
+  display: inline-grid;
+  place-items: center;
+  padding: 4px;
+  background: none;
+  border: 0;
+  color: var(--label-3);
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.icon-text-btn:hover {
+  color: var(--danger);
+}
+
+.sep {
+  color: var(--label-3);
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  flex: none;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--hairline);
+  background: var(--wall);
+  transition: width 0.2s ease;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+.sidebar-head {
+  flex: none;
+  height: var(--head-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sidebar-mark {
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.sidebar-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  margin: 16px 16px 8px;
+  padding: 0 12px;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--wall);
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-new:hover {
+  background: var(--dot);
+  border-color: var(--dot);
+  color: #fff;
+}
+
+.sidebar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  margin: 0 16px 12px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  background: none;
+  color: var(--label-2);
+  font-size: 12.5px;
+  text-align: left;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-search:hover {
+  border-color: var(--hairline-2);
+  color: var(--label);
+}
+
+.sidebar-search kbd {
+  margin-left: auto;
+  font: 11px var(--font-mono);
+  color: var(--label-3);
+}
+
+.conv-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.conv-empty {
+  padding: 8px 20px;
+  font: 11px var(--font-mono);
+  color: var(--label-2);
+}
+
+.conv-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 18px;
+  border-left: 2px solid transparent;
+  color: var(--label);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.conv-item:hover {
+  background: var(--wall-2);
+  color: var(--text);
+}
+
+.conv-item.active {
+  background: var(--wall-2);
+  border-left-color: var(--dot);
+  color: var(--text);
+}
+
+.conv-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.conv-letter {
+  display: none;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--hairline-2);
+  font: 500 12px var(--font-mono);
+  color: var(--label);
+}
+
+.conv-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 15px var(--font-work);
+}
+
+.conv-live {
+  flex: none;
+}
+
+.conv-remove {
+  flex: none;
+  opacity: 0;
+}
+
+.conv-item:hover .conv-remove,
+.conv-item:focus-within .conv-remove {
+  opacity: 1;
+}
+
+.conv-confirm {
+  flex: none;
+  font-size: 12px;
+}
+
+.sidebar-foot {
+  flex: none;
+  padding: 8px 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 20px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  color: var(--label);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.sidebar-link:hover {
+  background: var(--wall-2);
+  color: var(--text);
+}
+
+/* Collapsed rail */
+
+.sidebar.collapsed {
+  width: var(--rail-w);
+}
+
+.sidebar.collapsed .sidebar-text,
+.sidebar.collapsed .sidebar-mark {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-head {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar.collapsed .sidebar-new {
+  margin: 12px 10px 6px;
+  padding: 0;
+}
+
+.sidebar.collapsed .sidebar-search {
+  justify-content: center;
+  margin: 0 10px 8px;
+  padding: 0;
+}
+
+.sidebar.collapsed .conv-item {
+  justify-content: center;
+  padding: 6px 0;
+  border-left-color: transparent;
+}
+
+.sidebar.collapsed .conv-item.active .conv-letter {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--wall);
+}
+
+.sidebar.collapsed .conv-letter {
+  display: grid;
+}
+
+.sidebar.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+/* ---------- Running head ---------- */
+
+.head {
+  flex: none;
+  height: var(--head-h);
+  /* Three fixed slots, the same ones the Studio head uses: title/navigation
+     on the left, the Chat | Studio switch centred, controls on the right. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 16px;
+  padding: 0 var(--wall-pad);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--wall);
+}
+
+.head-left {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.head-center {
+  grid-column: 2;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.head-btn.head-menu {
+  display: none;
+  margin-left: -8px;
+}
+
+.head-title {
+  max-width: 48ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 14px var(--font-work);
+  color: var(--text);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.head-title.visible {
+  opacity: 1;
+  transform: none;
+}
+
+.head-right {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.head-sum {
+  position: relative;
+  margin-right: 10px;
+  padding: 6px 0;
+  font: 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--label);
+  cursor: default;
+  outline-offset: 2px;
+}
+
+.head-sum:hover .tooltip,
+.head-sum:focus-visible .tooltip {
+  opacity: 1;
+}
+
+.head-speeds {
+  position: relative;
+  margin-right: 10px;
+  padding: 6px 0;
+  font: 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--label);
+  cursor: default;
+  outline-offset: 2px;
+}
+
+.head-speeds:hover .tooltip,
+.head-speeds:focus-visible .tooltip {
+  opacity: 1;
+}
+
+.head-speeds.live {
+  color: var(--text);
+}
+
+.head-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--label);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.head-btn:hover {
+  color: var(--text);
+  background: var(--wall-2);
+}
+
+/* The session's door to the canvas half: a text pill in the head. */
+.head-btn.head-studio {
+  width: auto;
+  padding: 0 10px;
+  font-size: 13px;
+}
+

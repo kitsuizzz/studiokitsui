@@ -57,7 +57,7 @@ The app opens dark: the dark theme is the canvas's home.
 
 - The NN Studio page's header and the handbook (`ui/index.html`, `ui/docs.html`):
   the lockup, the favicon, the page titles.
-- The Chat half's top bar (`studio/frontend/src/components/TopBar.tsx`, through
+- The Chat half's top bar (`chat/frontend/src/components/TopBar.tsx`, through
   `BrandLockup.tsx`), its page title and favicon.
 
 ## Regenerate
@@ -65,9 +65,11 @@ The app opens dark: the dark theme is the canvas's home.
     .venv/bin/python brand/tools/make_brand.py --previews
 
 The first run fetches the two fonts into `brand/tools/cache/` (git-ignored; one
-network fetch). The same run rewrites the marked regions of `ui/index.html`,
-`ui/docs.html`, `studio/frontend/index.html`, `studio/frontend/src/index.css`
-and `studio/frontend/src/components/BrandLockup.tsx`, so every copy of the mark
+network fetch). The same run rewrites the marked regions of
+`ui/src/index.html` and `ui/src/css/30-brand.css` (then rebuilds
+`ui/index.html` with `tools/build_ui.py`), `ui/docs.html`,
+`chat/frontend/index.html`, `chat/frontend/src/styles/base.css` and
+`chat/frontend/src/components/BrandLockup.tsx`, so every copy of the mark
 comes from one definition. `tests/brand_test.py`, part of `tests/run.sh`, fails
 when a copy drifts. After a regeneration, rebuild the Chat half
-(`VITE_BASE_PATH=chat npm run build` in `studio/frontend`).
+(`VITE_BASE_PATH=chat npm run build` in `chat/frontend`).

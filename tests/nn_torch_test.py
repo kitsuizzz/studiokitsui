@@ -20,8 +20,8 @@ import tempfile
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent"))
-import nn_torch as T  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from runtime import nn_torch as T  # noqa: E402
 
 FAILED = []
 
@@ -290,7 +290,7 @@ def text_pipeline_generates():
     """A tokenizer -> model -> de-tokenizer design generates through the same
     loop: the ids the tokenizer made of its text grow, and the finished text
     lands on the last forward."""
-    import nn_tokenizers as nn_hf
+    from shared import nn_tokenizers as nn_hf
     repo = "unsloth/Qwen3.8-27B-NVFP4"
     try:                                 # offline unless the tokenizer is cached
         nn_hf.tokenizer_path(repo, download=False)
@@ -1082,7 +1082,7 @@ def hf_tokenizer_from_cache():
         print("  skip huggingface tokenizer (pip install tokenizers)")
         return
     import json as _json
-    import nn_tokenizers as HT
+    from shared import nn_tokenizers as HT
     for text, want in (("Qwen/Qwen3-8B", "Qwen/Qwen3-8B"),
                        ("gpt2", "gpt2"),
                        ("https://huggingface.co/Qwen/Qwen3-8B", "Qwen/Qwen3-8B"),

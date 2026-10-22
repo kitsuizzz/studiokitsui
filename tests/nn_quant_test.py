@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native GGUF kernels (agent/nn_quant.py) vs the gguf reference.
+"""Native GGUF kernels (runtime/nn_quant.py) vs the gguf reference.
 
 The kernels are the only place the canvas re-implements ggml's block math, so
 every supported type is checked tensor-by-tensor against
@@ -10,12 +10,12 @@ import os
 import sys
 import types
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agent"))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import torch
 
-import nn_quant
+from runtime import nn_quant
 
 
 def check_registry():
@@ -191,7 +191,7 @@ def check_engine_native(rng):
     `native=False` (training) and non-native types dequantize as before."""
     import tempfile
 
-    import nn_torch as T
+    from runtime import nn_torch as T
     from gguf import GGMLQuantizationType, GGUFWriter
     from gguf.quants import dequantize, quantize
 

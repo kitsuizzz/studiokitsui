@@ -71,23 +71,23 @@ def nnstudio_header():
 
 
 def chat_half():
-    html = read("studio/frontend/index.html")
+    html = read("chat/frontend/index.html")
     need("<title>Studio Kitsui — Chat</title>" in html, "the Chat page title")
     need('rel="icon" href="data:image/svg+xml,' in html, "the Chat favicon")
-    tsx = read("studio/frontend/src/components/BrandLockup.tsx")
+    tsx = read("chat/frontend/src/components/BrandLockup.tsx")
     need("export default function BrandLockup" in tsx, "the React component")
-    top = read("studio/frontend/src/components/TopBar.tsx")
+    top = read("chat/frontend/src/components/TopBar.tsx")
     need('import BrandLockup from "./BrandLockup";' in top and "<BrandLockup />" in top,
          "the top bar uses the lockup")
     need("chat.kitsui</span>" not in top, "the old text mark is gone")
-    need(".brand-lockup {" in read("studio/frontend/src/index.css"),
+    need(".brand-lockup {" in read("chat/frontend/src/styles/base.css"),
          "the Chat stylesheet carries the brand")
 
 
 check("the kit is written: the masters, the favicon, the previews", kit_is_written)
 check("the NN Studio page carries the mark", lambda: carries_the_mark("ui/index.html"))
 check("the Chat component carries the mark",
-      lambda: carries_the_mark("studio/frontend/src/components/BrandLockup.tsx"))
+      lambda: carries_the_mark("chat/frontend/src/components/BrandLockup.tsx"))
 check("the NN Studio header, title and favicon", nnstudio_header)
 check("the handbook carries the mark", lambda: carries_the_mark("ui/docs.html"))
 check("the Chat half: title, favicon, and the top bar's lockup", chat_half)

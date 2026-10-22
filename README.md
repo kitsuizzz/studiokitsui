@@ -7,8 +7,8 @@ The app is **Studio Kitsui**: *Studio* (the canvas) and *Chat* (AI Studio), one 
 A dedicated app for designing a neural network — **one canvas** with twelve
 kinds of boxes, built straight from a GGUF file (or by hand), wired live,
 priced for VRAM, and saved as JSON. It only draws: the whole design **runs on
-a backend of your own** — a small agent you start on the machine that holds
-the GPU, which dials the app and stays connected (see **Backend** and
+a backend of your own** — a small runner you start on the machine that
+holds the GPU, which dials the app and stays connected (see **Backend** and
 **Run** below).
 
 ## Chat and Studio — the app's two halves
@@ -20,9 +20,16 @@ top bar and the left menu are the same DOM in either half — one session list,
 the same account, theme, and fold — and a crossing swaps only the main area.
 The chat half's welcome is full-bleed under that top bar: the left menu waits
 for the first session and comes back with it. The **Chat | Studio** switch
-sits in the head row — next to **Chat Kitsui** in a chat and at the canvas
-head in Studio. The welcome (which has no head) has no switch: it appears
-with the first session.
+sits in the same centred slot of the head row in both halves — with the mode's
+own controls to its right. The welcome (which has no head) has no switch: it
+appears with the first session.
+
+In Studio, **Load model** is the one loading door: paste a Hugging Face repo
+id/URL or a local diffusers folder, and the app studies its config and tensor
+headers before landing one Model box. The manual GGUF/HF Import menu is retired
+from the UI. The first study slice supports the exact text-model specs and
+diffusers `UNet2DConditionModel`; diffusers transformer/DiT pipelines, full
+diffusion sampling, and the Modal fallback are the next adapters.
 
 The front door is `/`, and it routes by who is arriving: a **guest** always
 lands on the landing page — the Chat half's welcome, where Create an account
@@ -62,19 +69,23 @@ key `current` is folded into `session|current` at first boot, the legacy
 tabs first, so a link made in the chat meanwhile never shadows them. The
 binding also rides in the canvas record's `session` field — the
 conversation's id — so at boot the chat half re-links a session whose canvas
-is missing, or bound to someone else, to a fresh blank, and the agent reads
-the canvas through the **read_canvas** tool: read-only, no consent, the
-sealed record re-opened on every call. A guest's door crosses to a plain
+is missing, or bound to someone else, to a fresh blank. Embedded, the agent
+reads the live canvas with **read_canvas** and changes it with
+**edit_canvas**: a call is a batch of top-level box/wire operations, approved
+in chat and applied as one undo step, with the canvas left unsaved so the
+user can review, undo or save it in Studio. Standalone chat falls back to the
+sealed record for reads and cannot edit. A guest's door crosses to a plain
 `/studio` — no key, no binding — and a conversation that predates the
 binding adopts a fresh canvas on its first click.
 
-They are one app on one origin and **one server**: `./run.sh` is the whole
-thing. nnstudio's server serves the Chat half's built SPA and runs its gateway
+They are one app on one origin and **one app backend**: `./run.sh` starts
+`app/server.py`, which serves the Chat half's built SPA and runs its gateway
 (FastAPI — accounts, the encrypted store, the OpenAI pass-through) **inside
-its own process**, behind a small ASGI bridge (`nn_gateway.py`), so
+its own process**, behind a small ASGI bridge (`app/gateway_bridge.py`), so
 `/chat/auth/*` and `/chat/v1/*` never leave the server. The Chat half is
-vendored under `studio/` — sources and the build recipe (`VITE_BASE_PATH=chat`)
-live in [studio/README.md](studio/README.md). MariaDB (accounts) and the optional
+vendored under `chat/` — sources and the build recipe (`VITE_BASE_PATH=chat`)
+live in [chat/README.md](chat/README.md). The canvas design runs on the
+separate **runner** (`runner/runner.py`); training is the one app-side job. MariaDB (accounts) and the optional
 SearXNG run in Docker from the upstream AI Studio checkout; the app's `.env`
 names them (see **Settings** below). While MariaDB is down, `/` and `/chat`
 still serve, and accounts answer 503.
@@ -89,13 +100,22 @@ A user service is installed as `nnstudio.service` (port 8124):
     systemctl --user status nnstudio
     journalctl --user -u nnstudio -f
 
-The app has its own venv (`.venv` — `gguf` + `numpy`) and a `models/` link to
+If an installed unit still names `nn_server.py`, point its `ExecStart` at
+`.venv/bin/python -m app.server` (the app package). The runner's unit is
+`runner/nnstudio-agent.service` (or `.plist` on macOS).
+
+The app has its own venv (`.venv` — `gguf`, `numpy`, and torch for the app-side training job) and a `models/` link to
 the next-token GGUFs. The server is stdlib + the builder: `/` (the UI),
 `/api/models` (the local GGUF list the GGUF node's form shows),
 `/api/gguf/canvas` (header-only model → canvas), `/api/gpu` (GPU numbers,
 straight from `nvidia-smi`), `/api/backend` (who is connected) and
-`/api/run` (dispatch the design to the agent). It listens for agents on
-`--control-port` (8125 by default).
+`/api/run` (dispatch the design to the runner). It listens for runners on
+`--control-port` (8125 by default). The app backend never imports torch; the
+only app-side torch jobs are training and weight metadata/export
+(`app/jobs/`). The role table, boundary rules, and the training exception are
+in [docs/architecture.md](docs/architecture.md); see
+[docs/glossary.md](docs/glossary.md) for the words, and
+[docs/onboarding.md](docs/onboarding.md) for the first-day path.
 
 ## Accounts — one account, both halves
 
@@ -164,7 +184,7 @@ Sealing needs WebCrypto, which browsers only expose on secure origins —
 (the dialog says so).
 
 The endpoints behind this are the Chat half's, served in-process by the
-gateway (`studio/backend/app/accounts.py`): `POST /chat/auth/signup`
+gateway (`chat/backend/gateway/accounts.py`): `POST /chat/auth/signup`
 (`credential`, `handle`, `captcha`), `POST /chat/auth/signin` (`credential`),
 `POST /chat/auth/signout`, `GET /chat/auth/me`, `GET /chat/auth/config`, and
 the sealed store: `GET /chat/auth/store`, `POST /chat/auth/store/sync`.
@@ -223,10 +243,25 @@ copy the **Site Key** and the **Secret Key** into `.env`, and set
 site key is public by design (the page hands it to every browser); the secret
 one stays on the server.
 
+## Build the shell
+
+`ui/index.html` is generated from the sources in `ui/src/` (markup, CSS, JS
+slices). The page is still one self-contained file at runtime — the server
+serves only that file — so a source change is followed by:
+
+    .venv/bin/python tools/build_ui.py
+
+`tools/build_ui.py --check` is part of `tests/run.sh` and fails when the
+checked-in page is stale. The layout, the cascade, the slice order, and the
+test seams are documented in [ui/README.md](ui/README.md). The Chat half's
+stylesheet is split under `chat/frontend/src/styles/`, with
+`src/index.css` as the ordered import manifest.
+
 ## Tests
 
-    ./tests/run.sh           # offline: JS syntax, the DOM harness, the builder, the engine,
-                             #   the account crypto, the session seam, HTML
+    ./tests/run.sh           # offline: the shell build, JS syntax, the DOM harness,
+                             #   the builder, the engine, the account crypto, the
+                             #   session seam, HTML
     ./tests/run.sh --live    # + the running app, a real agent run, and the gateway's
                              #   own pytest suite (needs the MariaDB container)
     # the diffusers gate needs the venv's diffusers (the reference): it builds a
@@ -236,24 +271,24 @@ one stays on the server.
 
 | file | role |
 |---|---|
-| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold and theme — remembered for an account, fresh for a guest) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head's Chat | Studio switch is the pair's crossing — the canvas opens its chat, or gains one — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page |
-| `nn_engine.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
-| `nn_server.py` | the stdlib server: the UI, the GGUF list, the builder endpoint, the GPU badge, the agents' control listener and the run dispatch |
-| `agent/nnstudio_agent.py` | **the user's backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |
-| `agent/nn_torch.py` | the canvas→torch engine the agent runs (fed by the app, never by this page) |
-| `agent/nn_tokenizers.py` | huggingface `tokenizer.json` fetching + metadata (stdlib until a tokenizer is loaded) |
+| `ui/index.html` | the one shell page — the top bar (brand, settings, the account) and the left menu (one line per session: its chat and its canvas, whichever half is missing made on the first crossing; New session; the ⌘K switcher over the same list; the fold and theme — remembered for an account, fresh for a guest) are the same DOM in both halves, and the page hosts the two mains: the canvas (the head's Chat | Studio switch is the pair's crossing — the canvas opens its chat, or gains one — and the toolbar's menus: Palette · Import · Backend — the server config's door, up top of that menu — · VRAM; Ctrl/Cmd+S saves) and the Chat main (the vendored SPA, mounted in `#nn-chat` from the build manifest); the crossings are live and the address follows (`/chat`, `/studio`); one self-contained page, **generated from `ui/src/`** by `tools/build_ui.py` (see `ui/README.md`) |
+| `app/design.py` | the GGUF/HF → canvas builder (`build_canvas` is pure; `gguf_canvas`/`hf_canvas`/`diffusers_unet_canvas` read real headers — the diffusers one mirrors UNet2DConditionModel module for module, SDXL's text_time conditioning included) — extracted from next-token's engine |
+| `app/server.py` | the app backend: the UI, the GGUF list, the builder endpoint, the GPU badge, the runners' control listener and the run dispatch |
+| `runner/runner.py` | **the studio backend** — run it on the machine that holds the GPU; it dials the app, reports the machine and executes designs |
+| `runtime/nn_torch.py` | the shared canvas→torch runtime the runner and the app-side training job use |
+| `shared/nn_tokenizers.py` | huggingface `tokenizer.json` fetching + metadata (stdlib until a tokenizer is loaded) |
 | `tests/ui_boot.js` | the DOM-stub harness (boxes, wires, sizes, estimate, undo, copy/paste, GGUF node, flags, the menus) |
 | `tests/gguf_canvas_test.py` | the pure builder test, on synthetic tensors |
 | `tests/nn_torch_test.py` | the engine's offline tests (forward, ops, training, GGUF weights) |
-| `tests/diffusers_unet_test.py` | the diffusers gate: tiny random UNet2DConditionModels — plain, SDXL's `text_time`, SDXL's whole block shape — through diffusers' eager path and through `nn_engine.diffusers_unet_canvas`: stage for stage, every tensor bound |
+| `tests/diffusers_unet_test.py` | the diffusers gate: tiny random UNet2DConditionModels — plain, SDXL's `text_time`, SDXL's whole block shape — through diffusers' eager path and through `app.design.diffusers_unet_canvas`: stage for stage, every tensor bound |
 | `tests/studio_crypto_test.js` | the Studio half's account crypto, pinned to the Chat half's: the key's shape, the credential, the HKDF record key against Node's own HKDF, the record binding (AAD), and the AAD normalizer over the page's legacy rows |
 | `tests/canvas_link_test.js` | the session seam from the Chat half's side: the canvas half's own sealer writes the rows (keyed by the AADs, `canvas|<id>`, `session|current`), the Chat half's canvasLink — bundled for Node, the store stubbed — reads them back; plus the digest and the `read_canvas` tool the agent rides on |
 | `tests/gateway_bridge_test.py` | the in-process ASGI bridge: the scope, streaming in order, a slow client losing nothing, mid-stream failures, the failed startup, and the client-hang-up cancellation |
-| `nn_gateway.py` | the bridge that runs the Chat half's FastAPI gateway inside this process (one event loop, one task per request, cancellation on hang-up) |
-| `tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
-| `tools/chat_job.py` | the AI agent canvas's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
-| `studio/frontend/src/lib/canvasLink.ts` | the session seam, chat side: reads the canvas rows the canvas half seals (a row's key is the AAD its record is sealed under), writes the binding — mints the canvas a session binds to, appends its tab to the shared `session|current` record — and hands the agent the read-only `read_canvas` tool |
-| `studio/` | the Chat half, vendored: AI Studio's React SPA (mounted by the one shell page at `/chat` from `frontend/dist/.vite/manifest.json`) and its FastAPI gateway, run in-process by `nn_gateway.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `studio/README.md` |
+| `app/gateway_bridge.py` | the bridge that runs the Chat half's FastAPI gateway inside this process (one event loop, one task per request, cancellation on hang-up) |
+| `runner/tools/quant_bench.py` | what a design's weights cost per sweep: the native kernels timed on real blocks of a GGUF, summed per type |
+| `app/jobs/chat_job.py` | the AI agent canvas's runner: one conversational turn per `chat` task, the CLI session mirrored into the task's meta and carried into the next |
+| `chat/frontend/src/lib/canvasLink.ts` | the session seam, chat side: reads the canvas rows the canvas half seals (a row's key is the AAD its record is sealed under), writes the binding — mints the canvas a session binds to, appends its tab to the shared `session|current` record — and hands the agent the `read_canvas` and `edit_canvas` tools (live through the shell bridge when embedded, the sealed record as the standalone read fallback) |
+| `chat/` | the Chat half, vendored: AI Studio's React SPA (mounted by the one shell page at `/chat` from `frontend/dist/.vite/manifest.json`) and its FastAPI gateway, run in-process by `app/gateway_bridge.py` (accounts, the encrypted store, `/chat/v1` + `/chat/auth`) — see `chat/README.md` |
 | `tools/tls_local.sh` | the tiny local CA + server certificate (`.certs/`, git-ignored) for reaching the app over https from your own devices |
 | `tests/agent_test.py` | the live end-to-end: a real agent connects and a design runs (`--live`) |
 | `weights/` | where `export weights …` writes, and a place to drop pt / safetensors / gguf files for the pickers |
@@ -266,21 +301,25 @@ the two places a design can run; each section drops down into its own
 instructions and settings, and a `use …` chip marks the one in use (remembered
 in the browser):
 
-- **Local** — a computer of your own. Start the agent there and it **dials
+- **Local** — a computer of your own. Start the runner there and it **dials
   this app and stays connected** (one stateful TCP channel, newline-JSON both
-  ways; the app heartbeats it). The app listens on port **8125**
-  (`--control-port` on `nn_server.py`):
+  ways; the app heartbeats it). On its first run it prints a **one-time
+  connection code**; enter that under **Backend → Local**. The code is
+  single-use and short-lived; the runner then saves its token in
+  `~/.nnstudio/runner.json` and reconnects by itself. The app listens on
+  **127.0.0.1:8125** (`--control-host` / `--control-port` on `app/server.py`;
+  loopback by default):
 
-      python nnstudio_agent.py --app <this-app>:8125
+      python runner/runner.py --app <this-app>:8125
 
   On this machine it runs as the `nnstudio-agent` user service
-  (`agent/nnstudio-agent.service`, `Restart=always`; on macOS
-  `agent/nnstudio-agent.plist` is the same thing as a LaunchAgent) so the
+  (`runner/nnstudio-agent.service`, `Restart=always`; on macOS
+  `runner/nnstudio-agent.plist` is the same thing as a LaunchAgent) so the
   backend stays up
-  across crashes and logins; see `agent/README.md` to install it elsewhere.
+  across crashes and logins; see `runner/README.md` to install it elsewhere.
 
   The agent needs `python3`, `torch` (the CUDA build to use an NVIDIA gpu; on
-  Apple Silicon the plain wheel runs designs on the metal gpu — the agent
+  Apple Silicon the plain wheel runs designs on the metal gpu — the runner
   probes it once and reports `device: mps`) and
   `numpy`; `gguf` is optional (only designs bound to real GGUF files need it,
   and the file must sit at the same path on that machine). As soon as it
@@ -296,15 +335,16 @@ in the browser):
   an Apple gpu every quantized layer takes this path). The K-family kernels
   run
   near half the card's bandwidth; the IQ-family ones are several times
-  slower — `tools/quant_bench.py <file>` times a file block by block and
+  slower — `runner/tools/quant_bench.py <file>` times a file block by block and
   prices one forward pass, which is usually where a slow decode lives.
   [docs/backend.md](docs/backend.md)
-  has the per-platform matrix, and `tools/backend_check.py` reports what your
+  has the per-platform matrix, and `runner/tools/backend_check.py` reports what your
   machine can do.
 - **Remote — Modal (BYOK)** — paste a Modal token (it stays in this browser,
   never in the design) and jobs will run on your own Modal account; the
   section points at `modal.com → Settings → Tokens`. The transport is not
-  wired yet: the server config's door enables with a saved key, and says so.
+  wired yet: the choice is remembered, but Run stays disabled until a Modal
+  runner exists. Training remains app-side either way.
 
 The section in use wears an orange dot, and the choice survives a reload.
 A caveat: the control port trusts whoever connects — keep it on a network you
@@ -316,14 +356,14 @@ control.
 menu's first row — and is the machine's window; with no backend connected it
 says so. Open it and it is the one place that shows:
 
-- **the machine** — the agent's specs (CPU and cores, RAM, GPU and VRAM,
+- **the machine** — the runner's specs (CPU and cores, RAM, GPU and VRAM,
   torch/CUDA, OS) and **what it is using right now**: `ram now 14.2 / 30 GB ·
-  47%` and `vram now 6.1 / 15.5 GB · 39%`, pushed by the agent every few
+  47%` and `vram now 6.1 / 15.5 GB · 39%`, pushed by the runner every few
   seconds so the numbers stay live;
 - **the weights** — a **cpu offload** bar sets the ratio (the first layers
   stay on the gpu, the rest on the system's ram), then **load weights** pins
   every weight box in the design (nested boxes included) and **pre-loads the
-  whole design on the agent** — compiled there, every weight materialised where
+  whole design on the runner** — compiled there, every weight materialised where
   it was told, and kept warm for the next run. The bytes come from the JSON first: a design that **cannot fit**
   is refused *instantly* (`its weights need 50.8 GB on the gpu, but only
   15.2 GB is free — put layers on the system, or use load all on system`)
@@ -358,7 +398,7 @@ in the design (`place` in the JSON), and the engine moves each box to its
 device before its forward — so a network can split across VRAM and system RAM
 mid-forward. Unset boxes take the backend's own device.
 
-A missing or bad input is answered with the agent's own reason, not a crash;
+A missing or bad input is answered with the runner's own reason, not a crash;
 the app itself never imports torch. A run that fails — a missing input, an op
 the engine refuses, an out-of-memory — **hands its memory straight back**: the
 compiled graph, the frames of its traceback and the CUDA cache all let go, so
@@ -377,7 +417,7 @@ button, a smaller model, or fewer layers per device is the fix.
 The agent runs the canvas's boxes as the engine knows them — forward only. A
 Script box is carried in the design but not executed by this engine yet. A box
 bound to a file (`file` + `t`) loads those tensors instead of the random init
-— GGUF, safetensors or pt — so keep the file at the same path on the agent's
+— GGUF, safetensors or pt — so keep the file at the same path on the runner's
 machine (GGUF-bound boxes need `gguf` installed there; safetensors is read
 built-in, and pt is read with `weights_only`).
 
@@ -881,10 +921,10 @@ is a **spec**, and a spec is only accepted when it survives a numeric gate.
   gate compares layer module outputs.)
 - **The AI agent drafts specs.** `/reverse-model <model_type|repo>` runs the
   workflow in `.opencode/commands/reverse-model.md`: it reads the family's
-  source (`tools/reverse_model.py sources llama` prints the config, model,
+  source (`app/jobs/reverse_model.py sources llama` prints the config, model,
   decoder layer, attention, MLP, eager attention, rope and mask helpers),
-  inspects the repo's tensors (`tools/reverse_model.py inspect <repo>`), writes
-  or updates the spec, and runs `tools/reverse_model.py check <family>` until
+  inspects the repo's tensors (`app/jobs/reverse_model.py inspect <repo>`), writes
+  or updates the spec, and runs `app/jobs/reverse_model.py check <family>` until
   every stage is green — the harness catches what reading alone can't (rope
   layout, QK-norm placement, GQA repeat order, mask dtype, v5's tied hidden
   state).
@@ -895,7 +935,7 @@ is a **spec**, and a spec is only accepted when it survives a numeric gate.
   org/name"* and the first turn's prompt points the agent at the same
   `.opencode/commands/reverse-model.md` workflow; its words, tool calls and
   step markers stream into the thread as they are written. Every message is
-  one `chat` task (`tools/chat_job.py`), and the **session** is what makes it a
+  one `chat` task (`app/jobs/chat_job.py`), and the **session** is what makes it a
   conversation: the CLI's own session id is mirrored into the task's meta, and
   the next turn runs with `--session <id>` — so *"why two norms there?"* lands
   in the same context. There are no gates on a chat turn; the agent's own
@@ -907,7 +947,7 @@ is a **spec**, and a spec is only accepted when it survives a numeric gate.
   which it got.
 - **`build canvas` runs the agent by itself.** Paste a repo whose family has
   no verified spec and the app keeps the approximate design usable while it
-  starts the reverse-model job in the background (`tools/reverse_job.py`,
+  starts the reverse-model job in the background (`app/jobs/reverse_job.py`,
   `POST /api/reverse`) — its progress lives **on the box**, step by step:
   `agent (claude-sonnet-4.5 @openrouter.ai) · qwen2 · running the conformance
   gate · 5/9 stages · 166s`. The base model comes from the repo's `.env` — any

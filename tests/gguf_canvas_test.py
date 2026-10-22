@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from nn_engine import build_canvas  # noqa: E402
+from app.design import build_canvas  # noqa: E402
 
 META = {"arch": "test", "name": "fixture model", "blocks": 2, "d_model": 512,
         "heads": 8, "kv_heads": 2,
@@ -319,7 +319,7 @@ assert refs and all(x.startswith("m.gguf::") for x in refs), "bindings carry the
 # ---- an mmproj's vision tower: the cluster the loader adds -------------------
 import tempfile                                                  # noqa: E402
 import numpy as np                                               # noqa: E402
-from nn_engine import _vision_cluster, clip_meta_and_tensors     # noqa: E402
+from app.design import _vision_cluster, clip_meta_and_tensors     # noqa: E402
 
 
 def _write_mmproj(path, projector="qwen3vl_merger"):
@@ -391,7 +391,7 @@ with tempfile.TemporaryDirectory() as td:
 print("gguf_canvas: the vision tower cluster rides along")
 
 # ---- the same folder holds both kinds: each .gguf is recognized on its own --
-from nn_engine import gguf_canvas, gguf_kind, local_models              # noqa: E402
+from app.design import gguf_canvas, gguf_kind, local_models              # noqa: E402
 
 
 def _write_tiny_model(path):

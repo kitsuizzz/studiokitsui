@@ -1,9 +1,9 @@
 # Family specs + the hf_arc database — verified architecture, per family and per repo
 
 A **spec** is the ground-truth answer to "how are this family's boxes wired?".
-nnstudio's HF-repo loader (`nn_engine.hf_canvas`) resolves a repo in this order:
+nnstudio's HF-repo loader (`app/design.py `hf_canvas``) resolves a repo in this order:
 
-1. **`hf_arc`** (the repo-architecture database, `nn_arc.py`, `hf_arc.db`) — a row
+1. **`hf_arc`** (the repo-architecture database, `app/arc.py`, `hf_arc.db`) — a row
    keyed by the repo id holding the serialized nested-box canvas the reverse job
    researched and proved for *this repo*. Instant and exact (`canvas.model.arc`).
 2. a **family spec** for its `model_type` — rendered as **native boxes only**,
@@ -18,7 +18,7 @@ random model of the family is run through the library's **eager** path and
 through the canvas, and every stage (embedding, q/k/v projections, every block,
 logits) must match to 1e-4 — in practice they match exactly. The job re-runs
 that gate and then binds the spec to the repo's real tensor names
-(`nn_engine.arc_canvas`); only on success does the `hf_arc` row land.
+(`app/design.py `arc_canvas``); only on success does the `hf_arc` row land.
 
 ## Files
 
@@ -26,12 +26,12 @@ that gate and then binds the spec to the repo's real tensor names
 - `hf_arc.db` — `hf_arc(repo_id TEXT PRIMARY KEY, canvas TEXT, created_at,
   transformers, note)`: each researched repo's canvas as JSON. The table is the
   cache and the deliverable — no agent say-so lands a row, only the job's gates.
-- `nn_arc.py` — the database plus the job's file state (`<slug>.json`,
+- `app/arc.py` — the database plus the job's file state (`<slug>.json`,
   `<slug>.todos.json`, `<slug>.pipeline.json`).
 - `tests/spec_conformance_test.py` — the gate (`python tests/spec_conformance_test.py llama`).
 - `tests/reverse_job_test.py` — the job pipeline with a stubbed agent.
-- `tools/reverse_job.py` — the background job: agent, checklist, gates, row.
-- `tools/reverse_model.py` — the authoring toolbox: `sources`, `inspect`, `check`,
+- `app/jobs/reverse_job.py` — the background job: agent, checklist, gates, row.
+- `app/jobs/reverse_model.py` — the authoring toolbox: `sources`, `inspect`, `check`,
   `list`, and `report` (the checklist the box shows).
 - `.opencode/commands/reverse-model.md` — the AI workflow (`/reverse-model llama`).
 
@@ -108,9 +108,9 @@ default dtype.
 ## Adding a family (or a repo)
 1. `/reverse-model <model_type|repo>` (or do it by hand with the toolbox) — note
    the app starts the very same job by itself when `build canvas` meets a repo
-   without an `hf_arc` row (`tools/reverse_job.py`, `POST /api/reverse`; the
+   without an `hf_arc` row (`app/jobs/reverse_job.py`, `POST /api/reverse`; the
    checklist on the box, the exact canvas swapped in when the gates pass).
-2. `python tools/reverse_model.py check <family>` until every stage is green.
+2. `python app/jobs/reverse_model.py check <family>` until every stage is green.
 3. Multi-model repos: the agent writes `<slug>.pipeline.json` next to the job
    state; the job assembles the models into one top-level pipeline box.
 4. `./tests/run.sh` — the suite runs the conformance gate with the rest.

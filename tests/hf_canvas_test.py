@@ -11,8 +11,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import nn_engine  # noqa: E402
-import nn_arc     # noqa: E402
+from app import design as nn_engine  # noqa: E402
+from app import arc as nn_arc     # noqa: E402
 
 _arcdir = tempfile.mkdtemp(prefix="nnstudio-hf-arc-")
 os.environ["NNSTUDIO_ARC_DB"] = os.path.join(_arcdir, "hf_arc.db")

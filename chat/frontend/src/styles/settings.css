@@ -1,0 +1,527 @@
+/* ─── Model switcher, provider box, agents list, and the back-of-house settings.  */
+/* ---------- Model switcher (Server vs BYOK) ---------- */
+
+.models-switcher {
+  position: relative;
+  margin-right: 6px;
+}
+
+.models-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--wall);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.models-chip:hover {
+  border-color: var(--hairline-2);
+  background: var(--wall-2);
+}
+
+.models-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 12px var(--font-mono);
+  color: var(--text);
+}
+
+/* The category tag: Server stays quiet, BYOK is inked — the two never blur. */
+.models-tag {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--hairline-2);
+  font: 500 9px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+.models-tag.byok {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.models-tag.default {
+  border-color: var(--dot);
+  background: var(--dot-soft);
+  color: var(--dot);
+}
+
+.models-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 280px;
+  max-width: min(360px, calc(100vw - 32px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.models-group + .models-group {
+  margin-top: 6px;
+}
+
+.models-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 4px;
+  font: 500 10px var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+.models-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.models-row:hover {
+  background: var(--wall-2);
+}
+
+.models-row.selected {
+  background: var(--wall-3);
+}
+
+.models-row-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px var(--font-mono);
+  color: var(--text);
+}
+
+.models-empty {
+  padding: 10px 8px;
+  font: 11px var(--font-mono);
+  color: var(--label-2);
+}
+
+.models-manage {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  background: none;
+  text-align: left;
+  font: 500 11px var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--label);
+  cursor: pointer;
+}
+
+.models-manage:hover {
+  color: var(--text);
+  background: var(--wall-2);
+}
+
+/* The agent's model, under the chip's name. */
+.models-chip-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 10.5px var(--font-mono);
+  color: var(--label-2);
+}
+
+/* A menu row's second line: the model and provider the agent rides. */
+.models-row-sub {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 10.5px var(--font-mono);
+  color: var(--label-2);
+  text-align: right;
+}
+
+/* ---------- Settings → the provider box ---------- */
+
+.provider-box {
+  position: relative;
+}
+
+.provider-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall);
+  font: 13px var(--font-mono);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-toggle:hover {
+  background: var(--wall-2);
+}
+
+.provider-toggle-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-toggle-caret {
+  flex: none;
+  color: var(--label-2);
+}
+
+.provider-menu {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  top: calc(100% + 4px);
+  min-width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.provider-row:hover {
+  background: var(--wall-2);
+}
+
+.provider-row.active {
+  background: var(--wall-3);
+}
+
+.provider-row-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: 12.5px var(--font-mono);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.provider-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-check {
+  flex: none;
+  color: var(--dot);
+}
+
+.provider-row-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.provider-row-actions .btn.danger {
+  margin-left: 0;
+}
+
+.provider-add {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  background: none;
+  text-align: left;
+  font: 500 12px var(--font-mono);
+  color: var(--label);
+  cursor: pointer;
+}
+
+.provider-add:hover {
+  color: var(--text);
+  background: var(--wall-2);
+}
+
+/* ---------- Settings → the Add/Edit provider form ---------- */
+
+.provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall-2);
+}
+
+.provider-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Settings → the agents list ---------- */
+
+.agent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.agent-row:hover {
+  background: var(--wall-2);
+}
+
+.agent-row.active {
+  background: var(--wall-3);
+}
+
+.agent-row-pick {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.agent-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 12.5px var(--font-mono);
+}
+
+.agent-row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 10.5px var(--font-mono);
+  color: var(--label-2);
+}
+
+/* ---------- Settings → Agent Settings ---------- */
+
+.models-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--hairline);
+}
+
+.models-search {
+  margin-bottom: 6px;
+  font: 12px var(--font-mono);
+}
+
+.models-picker {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.models-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--danger);
+}
+
+.models-error-text {
+  margin: 0;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.admin-error {
+  color: var(--danger);
+}
+
+.field-warn {
+  padding: 8px 10px;
+  border-left: 2px solid var(--dot);
+  background: var(--dot-soft);
+  font: 11px/1.5 var(--font-mono);
+  color: var(--text);
+}
+
+.models-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+}
+
+.models-item + .models-item {
+  border-top: 1px solid var(--hairline);
+}
+
+.models-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.models-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.models-item-id {
+  font: 500 12px var(--font-mono);
+  color: var(--text);
+}
+
+.models-item-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11px var(--font-mono);
+  color: var(--label-2);
+}
+
+.models-item-actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.models-item-actions .btn.danger {
+  margin-left: 0;
+}
+
+.models-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.models-chip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--hairline-2);
+  font: 11px var(--font-mono);
+  color: var(--label);
+}
+
+.models-chip-x {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: 12px var(--font-mono);
+  color: var(--label-2);
+  cursor: pointer;
+}
+
+.models-chip-x:hover {
+  color: var(--danger);
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.suggestion {
+  padding: 8px 12px;
+  border: 1px dashed var(--hairline-2);
+  background: transparent;
+  color: var(--label);
+  font: 400 12.5px/1.4 var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  animation: settle 0.4s ease-out both;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.suggestion:hover {
+  border-style: solid;
+  border-color: var(--text);
+  background: var(--wall-2);
+  color: var(--text);
+}
+
+.suggestion.thinking {
+  cursor: default;
+  animation: blink 1s steps(2) infinite;
+}
+
+.suggestion.thinking:hover {
+  border-style: dashed;
+  border-color: var(--hairline-2);
+  background: transparent;
+  color: var(--label);
+}
+
+.greeting-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.greeting-form {
+  width: min(380px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+  animation: settle 0.4s ease-out both;
+}
+
+.greeting-form .greeting-actions {
+  justify-content: space-between;
+  margin-top: 4px;
+}
+

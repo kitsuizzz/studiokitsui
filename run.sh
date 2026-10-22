@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")"
 if [ -e .certs/server.crt ] && [ -e .certs/server.key ]; then
-  exec .venv/bin/python nn_server.py \
+  exec .venv/bin/python -m app.server \
     --tls-cert .certs/server.crt --tls-key .certs/server.key "$@"
 fi
-exec .venv/bin/python nn_server.py "$@"
+exec .venv/bin/python -m app.server "$@"

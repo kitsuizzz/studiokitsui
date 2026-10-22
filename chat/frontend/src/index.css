@@ -1,0 +1,24 @@
+/* ============================================================
+   chat.kitsui — "Salon"
+   The conversation as an exhibition. Every exchange is a work
+   on a wall; the prompt is its wall label. Gallery white, ink,
+   graphite for studies, and a single red dot. No bubbles, no
+   sidebar, no floating input box.
+   ============================================================ */
+
+/* The stylesheet is split by concern under ./styles/. The order below is the
+   cascade: later files override earlier ones, exactly as the old single file
+   did. Add a new rule to the file that owns its component; put a token in
+   tokens.css, not in a component file. */
+
+@import "./styles/tokens.css";
+@import "./styles/base.css";
+@import "./styles/shell.css";
+@import "./styles/exhibition.css";
+@import "./styles/settings.css";
+@import "./styles/work.css";
+@import "./styles/composer.css";
+@import "./styles/switcher.css";
+@import "./styles/studio.css";
+@import "./styles/app.css";
+@import "./styles/theme.css";

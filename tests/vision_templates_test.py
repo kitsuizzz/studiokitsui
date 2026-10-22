@@ -12,10 +12,10 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "agent"))
+sys.path.insert(0, os.path.join(HERE, ".."))
 import torch                                                    # noqa: E402
 
-import nn_torch as T                                            # noqa: E402
+from runtime import nn_torch as T                                            # noqa: E402
 
 SIDE = 32
 

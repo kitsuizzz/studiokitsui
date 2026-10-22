@@ -1,0 +1,201 @@
+/* ─── The pinned message composer. ───────────────────────────────────── */
+/* ---------- Composer ---------- */
+
+/* Sidebar collapsed: the whole column (message, gallery label, title, composer) is one block centred on the wall,
+   so every line in it keeps the alignment it has with the sidebar open. */
+.wall.centered {
+  /* The reading column takes the room the collapsed rail frees (up to 88ch); the label keeps its place beside it. */
+  --text-w: max(var(--measure), min(88ch, calc(100vw - var(--rail-w) - 2 * var(--wall-pad) - var(--label-w) - var(--gap) - 16px)));
+  --column-w: calc(var(--text-w) + var(--gap) + var(--label-w));
+}
+
+.wall.centered .work {
+  grid-template-columns: minmax(0, var(--text-w)) var(--label-w);
+  width: min(100%, var(--column-w));
+  margin: 0 auto;
+}
+
+.wall.centered .wall-text,
+.wall.centered .wall-empty {
+  max-width: var(--column-w);
+  margin: 0 auto;
+}
+
+.wall.centered .composer-wrap {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.wall.centered .composer {
+  margin: 0 auto 0 max(0px, calc((100% - var(--column-w)) / 2));
+}
+
+.composer-wrap {
+  position: sticky;
+  bottom: 0;
+  margin: auto calc(-1 * var(--wall-pad)) 0;
+  padding: 16px var(--wall-pad) 20px;
+  background: var(--wall);
+  border-top: 1px solid var(--hairline);
+}
+
+.composer {
+  width: var(--composer-w);
+  max-width: 100%;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composer:focus-within {
+  border-color: var(--text);
+}
+
+.composer.dragging {
+  border-color: var(--dot);
+  box-shadow: inset 0 0 0 1px var(--dot);
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 14px 0;
+}
+
+.composer-input {
+  display: block;
+  width: 100%;
+  /* one line by default; the component grows it with the message (up to
+     --composer-input-max) and then lets it scroll */
+  height: auto;
+  min-height: 44px;
+  max-height: var(--composer-input-max, 160px);
+  padding: 10px 16px 6px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  outline: 0;
+  /* The shared shell's unscoped `textarea:focus` rule paints an orange
+     focus ring around this input; its bottom edge reads as a stray line
+     between the textarea and the Attach row. The composer's own frame
+     already shows focus, so keep the ring out. */
+  box-shadow: none;
+  resize: none;
+  overflow-y: hidden;
+  font: 400 16px/1.5 var(--font-label);
+  color: var(--text);
+}
+
+.composer-input::placeholder {
+  color: var(--label-3);
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 10px 10px 12px;
+}
+
+.composer-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font-size: 12.5px;
+  color: var(--label);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.composer-tool:hover {
+  color: var(--text);
+  background: var(--wall-2);
+}
+
+.composer-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.composer-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--label);
+}
+
+.composer-field-label {
+  font: 500 10.5px var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+.composer-field .text-select select {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.composer-hint {
+  margin-left: auto;
+  font: 11.5px var(--font-mono);
+  color: var(--label-3);
+  white-space: nowrap;
+}
+
+.composer-blocker {
+  margin: 0 0 8px;
+  font: 11.5px var(--font-mono);
+  color: var(--danger);
+}
+
+.send-btn {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--wall);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.send-btn:hover {
+  background: var(--dot);
+  border-color: var(--dot);
+  color: #fff;
+}
+
+.send-btn.stop {
+  background: var(--wall);
+  color: var(--text);
+}
+
+.send-btn.stop:hover {
+  background: var(--wall);
+  color: var(--dot);
+  border-color: var(--dot);
+}
+
+.send-btn:disabled {
+  background: var(--wall-2);
+  border-color: var(--hairline-2);
+  color: var(--label-2);
+  cursor: not-allowed;
+}
+
+.send-btn:disabled:hover {
+  background: var(--wall-2);
+  border-color: var(--hairline-2);
+  color: var(--label-2);
+}
+

@@ -1,0 +1,907 @@
+/* ─── An AI-built workspace: plan, activity, critic, debug, consent. ─── */
+/* ---------- Studio: an AI-built workspace ---------- */
+
+.studio-preparing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--label-2);
+  animation: blink 1s steps(2) infinite;
+}
+
+.app-plan {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--wall-2);
+}
+
+.app-plan-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.app-plan-head .app-plan-bar {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.app-plan-pct {
+  font: 10px/1 var(--font-mono);
+  color: var(--label-2);
+  white-space: nowrap;
+}
+
+.app-plan-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hairline-2);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.app-plan-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--dot);
+  transition: width 0.4s ease;
+}
+
+.app-plan-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-plan-steps li {
+  font: 12px/1.5 var(--font-mono);
+  color: var(--label-2);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.app-plan-steps li.done {
+  color: var(--label);
+}
+
+.app-plan-steps li.active {
+  color: var(--label);
+}
+
+.app-plan-steps li.active .app-plan-check {
+  color: var(--dot);
+  opacity: 1;
+  animation: plan-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes plan-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.app-plan-cot {
+  font: 10px/1.4 var(--font-mono);
+  color: var(--label-2);
+  opacity: 0.7;
+  display: block;
+  margin-top: 1px;
+}
+
+.app-plan-check {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+li.done .app-plan-check {
+  color: var(--dot);
+  opacity: 1;
+}
+
+/* The plan gate: the build waits here for the user's go-ahead. */
+.app-plan-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--hairline-2);
+}
+
+.app-plan-build {
+  padding: 6px 16px;
+  border: 1px solid var(--dot);
+  border-radius: 6px;
+  background: var(--dot);
+  color: #fff;
+  font: 500 12px/1.4 var(--font-mono);
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.app-plan-build:hover {
+  opacity: 0.9;
+}
+
+.app-plan-build:active {
+  transform: translateY(1px);
+}
+
+/* The progress bar is a disclosure: expanding shows every step's
+   chain-of-thought plus the builder's live reasoning. */
+.app-plan-detail > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.app-plan-detail > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-plan-chevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  color: var(--label-2);
+  transition: transform 0.15s ease;
+}
+
+.app-plan-detail[open] .app-plan-chevron {
+  transform: rotate(180deg);
+}
+
+.app-plan-detail-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--hairline-2);
+}
+
+.app-plan-detail-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.app-plan-detail-rows li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+
+.app-plan-detail-rows li.active {
+  color: var(--label);
+}
+
+.app-plan-detail-rows li.done .app-plan-check {
+  color: var(--dot);
+  opacity: 1;
+}
+
+.app-plan-detail-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.app-plan-thinking {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
+.app-plan-thinking-label {
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+.app-plan-thinking-body {
+  margin-top: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+  font: 10px/1.6 var(--font-mono);
+  color: var(--label-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-question {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--wall-2);
+}
+
+.app-question-text {
+  margin: 0 0 10px;
+  font: 13px/1.5 var(--font-mono);
+  color: var(--label);
+}
+
+.app-question-assumptions {
+  margin: 0 0 12px;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--label-2);
+  opacity: 0.7;
+}
+
+.app-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.app-question-answer {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.app-question-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--hairline-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: 12px/1.5 var(--font-mono);
+  outline: 0;
+  transition: border-color 0.15s ease, border-style 0.15s ease;
+}
+
+.app-question-input::placeholder {
+  color: var(--label-2);
+}
+
+.app-question-input:focus {
+  border-style: solid;
+  border-color: var(--text);
+}
+
+.app-question-send {
+  flex: none;
+  padding: 0 12px;
+  border: 1px dashed var(--hairline-2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: 11px/1.4 var(--font-mono);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.app-question-send:hover:not(:disabled) {
+  color: var(--label);
+  border-color: var(--label-2);
+}
+
+.app-question-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.studio-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px dashed var(--hairline-2);
+  background: transparent;
+  color: var(--label);
+  font: 400 13px/1.4 var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.studio-card:hover {
+  border-style: solid;
+  border-color: var(--text);
+  background: var(--wall-2);
+  color: var(--text);
+}
+
+.studio-card-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-card-arrow {
+  margin-left: auto;
+  flex: none;
+}
+
+/* A build-thread card: the reply's result, linking to the dedicated thread. */
+.thread-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.thread-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 11px/1.4 var(--font-mono);
+  color: var(--label-2);
+}
+
+.thread-card-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.studio-interrupted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px dashed var(--hairline-2);
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+
+.studio-interrupted .dot {
+  background: var(--dot);
+}
+
+.studio-interrupted-text {
+  min-width: 0;
+}
+
+.studio-critic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font: 400 12px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+
+.studio-critic .dot {
+  background: var(--dot);
+}
+
+.studio-critic.refined {
+  opacity: 0.75;
+}
+
+/* ---------- workspace debug log ---------- */
+
+.appbar-debug {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.appbar-debug.has-errors {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.appbar-debug-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--danger);
+  color: #fff;
+  font: 500 10px/1 var(--font-mono);
+}
+
+.studio-debug {
+  flex: none;
+  max-height: 38vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--app-border);
+  background: var(--app-panel);
+  padding: 12px var(--app-pad);
+}
+
+.studio-debug-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.studio-debug-title {
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.studio-debug-count {
+  font: 11px/1 var(--font-mono);
+  color: var(--label-3);
+}
+
+.studio-debug-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.studio-debug-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-debug-entry {
+  display: grid;
+  grid-template-columns: 64px 44px 46px 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+
+.studio-debug-entry.error .studio-debug-message {
+  color: var(--danger);
+}
+
+.studio-debug-entry.warn .studio-debug-message {
+  color: var(--label);
+}
+
+.studio-debug-time,
+.studio-debug-source,
+.studio-debug-level {
+  color: var(--label-3);
+  white-space: nowrap;
+}
+
+.studio-debug-level {
+  text-transform: uppercase;
+}
+
+.studio-debug-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-debug-stack {
+  grid-column: 4;
+}
+
+.studio-debug-stack summary {
+  cursor: pointer;
+  color: var(--label-3);
+}
+
+.studio-debug-stack pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--hairline);
+  background: var(--wall-2);
+  font: 10px/1.5 var(--font-mono);
+  color: var(--label-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-debug-empty {
+  margin: 0;
+  font: 11px/1.6 var(--font-mono);
+  color: var(--label-3);
+}
+
+.studio-crash {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  background: var(--wall);
+}
+
+.studio-crash-title {
+  margin: 0;
+  font: 500 18px/1.3 var(--font-label);
+  color: var(--text);
+}
+
+.studio-crash-message {
+  margin: 0;
+  max-width: 640px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline-2);
+  background: var(--wall-2);
+  font: 11px/1.6 var(--font-mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.studio-crash-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- AI activity window (inline, part of the message) ---------- */
+
+.app-activity {
+  margin-top: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--wall-2);
+  overflow: hidden;
+}
+
+.app-activity-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.app-activity-head::-webkit-details-marker {
+  display: none;
+}
+
+.app-activity-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--label-3);
+}
+
+.app-activity-dot.live {
+  background: var(--dot);
+  animation: plan-pulse 1.2s ease-in-out infinite;
+}
+
+.app-activity-phase {
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+.app-activity.live .app-activity-phase {
+  color: var(--label);
+}
+
+.app-activity-chevron {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--label-3);
+  transition: transform 0.15s ease;
+}
+
+.app-activity[open] .app-activity-chevron {
+  transform: rotate(180deg);
+}
+
+.app-activity-body {
+  padding: 10px 12px 12px;
+  border-top: 1px dashed var(--hairline-2);
+}
+
+.app-activity-pane + .app-activity-pane {
+  margin-top: 12px;
+}
+
+.app-activity-pane-title {
+  margin: 0 0 6px;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--label-3);
+}
+
+.app-activity-pre {
+  margin: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font: 11px/1.6 var(--font-mono);
+  color: var(--label-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app-activity-empty {
+  margin: 0;
+  font: 11px/1.6 var(--font-mono);
+  color: var(--label-3);
+}
+
+.ai-fence {
+  color: var(--label-3);
+}
+
+
+
+.piece-md .katex-display {
+  margin: 14px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0 4px;
+}
+
+/* Inline maths: KaTeX's superscripts and fractions reach above the line box and collided with the line above.
+   A taller inline box reserves that room; display formulas keep KaTeX's own spacing. */
+.piece-md .katex {
+  line-height: 1.75;
+}
+
+.piece-md .katex-display .katex {
+  line-height: 1.2;
+}
+
+/* A malformed formula renders in KaTeX's error red; theme it to the app's. */
+.piece-md .katex .katex-error {
+  color: var(--danger);
+}
+
+
+/* ---------- AI inside the app (consent + chip) ---------- */
+
+.appbar-ai-chip {
+  max-width: 220px;
+  padding: 4px 8px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 999px;
+  font: 11px/1 var(--font-mono);
+  color: var(--label-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-consent-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(22, 22, 22, 0.32);
+}
+
+.ai-consent {
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px;
+  background: var(--wall);
+  border: 1px solid var(--hairline-2);
+}
+
+.ai-consent-text {
+  margin: 0;
+  font: 400 15px/1.5 var(--font-label);
+  color: var(--text);
+}
+
+.ai-consent-sub {
+  margin: 8px 0 0;
+  font: 11px/1.6 var(--font-mono);
+  color: var(--label-2);
+}
+
+.ai-consent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+[data-theme="dark"] .ai-consent-backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* The no-model warning: shown on the way into a session started from the
+   greeting when no usable model is configured yet. It shares the consent
+   dialog's shell and the wall's danger color for its heading. */
+.model-warning-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(22, 22, 22, 0.32);
+}
+
+.model-warning {
+  width: min(420px, calc(100vw - 32px));
+  padding: 18px 20px;
+  background: var(--wall);
+  border: 1px solid var(--hairline-2);
+}
+
+.model-warning-title {
+  margin: 0;
+  font: 600 15px/1.4 var(--font-label);
+  color: var(--danger);
+}
+
+.model-warning-text {
+  margin: 8px 0 0;
+  font: 400 13px/1.6 var(--font-label);
+  color: var(--label);
+}
+
+.model-warning-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+[data-theme="dark"] .model-warning-backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.studio-retry {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline-2);
+  background: transparent;
+  color: var(--label);
+  font: 500 11px/1.4 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.studio-retry:hover {
+  border-color: var(--text);
+  background: var(--wall-2);
+  color: var(--text);
+}
+
+.studio-raw {
+  flex-basis: 100%;
+}
+
+.studio-raw summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--label-2);
+}
+
+.studio-raw pre {
+  margin-top: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--hairline-2);
+  font: 11px/1.6 var(--font-mono);
+  color: var(--label);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   App surface: an AI-built workspace owns the WHOLE window.
+   The "app look" lives entirely under [data-surface="app"]: tokens
+   plus a UI-grade control restyle. The Salon/gallery base styles
+   (below) remain the fallback — point data-surface elsewhere to
+   revert an app to the current look.
+   ============================================================ */
+
+[data-surface="app"] {
+  --app-bg: var(--wall);
+  --app-panel: var(--wall);
+  --app-panel-2: var(--wall-2);
+  --app-border: var(--hairline-2);
+  --app-radius: 10px;
+  --app-gap: 14px;
+  --app-gap-sm: 10px;
+  --app-gap-lg: 22px;
+  --app-pad: 22px;
+  --app-head-h: 52px;
+  --app-font: var(--font-label);
+  --app-shadow: 0 1px 2px rgba(18, 18, 18, 0.05), 0 2px 6px rgba(18, 18, 18, 0.04);
+  --app-control-h: 34px;
+  background: var(--app-bg);
+}
+
+.studio-view {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--wall);
+}
+
+[data-surface="app"] .studio-appbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--app-head-h);
+  padding: 0 var(--app-pad);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-bg);
+}
+
+[data-surface="app"] .studio-appbar-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 14px/1.2 var(--app-font);
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+[data-surface="app"] .studio-appbar-actions {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The stage fills the window below the app bar and is the scroll fallback. */
+[data-surface="app"] .app-stage {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-gap);
+  padding: var(--app-pad);
+  overflow-y: auto;
+}
+
+/* The settle wrapper is a pass-through (its children are the flex items). */
+[data-surface="app"] .app-settle {
+  display: contents;
+}
+
+[data-surface="app"] .app-stage > * {
+  animation: settle 0.22s ease-out both;
+}
+
+/* A layout block marked "fill" grows to fill its flex parent's free space. */
+[data-surface="app"] .fill {
+  flex: 1 1 0;
+  min-height: 0;
+}
+

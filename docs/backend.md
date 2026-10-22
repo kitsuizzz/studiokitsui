@@ -1,15 +1,20 @@
 # Backend: quantized layers, and what runs natively
 
-This page is about what the local backend (the agent) can execute and what it
+This page is about what the runner (the studio backend) can execute and what it
 needs from the machine. nnstudio never installs anything — it detects, uses
 what is there, and reports what is missing.
+
+The app backend is separate and never imports torch. Two app-side jobs are the
+exception to “the runner runs everything”: **training** and **weight
+metadata/export** (`app/jobs/train_job.py`, `app/jobs/weights_job.py`) run
+beside the app and import the shared `runtime/` in their own child process.
 
 ## Native GGUF quantized layers
 
 A **frozen** layer box bound to a GGUF file can keep its weights at rest in
 ggml's block form and run a fused dequant–GEMM on the GPU: the matrix is never
 materialized as f16, so a Q4_K model costs ~4.5 bits per weight of memory
-instead of 16. The kernel lives in `agent/nn_quant.py` and is verified
+instead of 16. The kernel lives in `runtime/nn_quant.py` and is verified
 tensor-by-tensor against `gguf.quants.dequantize` (`tests/nn_quant_test.py`).
 
 | how | where | needs |
@@ -37,7 +42,7 @@ does not. The dtype picker marks the native types with `· native`.
 An mmproj file is a multimodal model's **vision encoder**: patch embedding
 (two summed convs), a stack of vision blocks, and the projector that merges
 2×2 patch groups into embeddings the text model can read. nnstudio runs the
-whole tower in torch as one `vision` box (`agent/nn_torch.py:VisionTower`),
+whole tower in torch as one `vision` box (`runtime/nn_torch.py:VisionTower`),
 ported from llama.cpp's `clip_graph_qwen3vl` and verified stage-by-stage
 against `llama-mtmd-debug`'s tensor dump on synthetic images (gray /
 checkerboard / rainbow at 64 and 128 px):
@@ -97,7 +102,7 @@ f16 fallback all run with PyTorch + gguf alone.
 
 ## Check your machine
 
-    .venv/bin/python tools/backend_check.py
+    .venv/bin/python runner/tools/backend_check.py
 
 Read-only: it prints platform, torch/Triton, the native kernel set and which
 optional providers are present, with hints for what is missing. It installs

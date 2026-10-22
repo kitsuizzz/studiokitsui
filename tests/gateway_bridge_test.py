@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The ASGI bridge: one process, two frameworks, no sockets.
 
-nn_gateway runs the Chat half's FastAPI app on an event loop in a daemon
-thread; nn_server's handler owns the client socket and drains a queue. These
+app/gateway_bridge.py runs the Chat gateway on an event loop in a daemon
+thread; app/server.py's handler owns the client socket and drains a queue. These
 tests drive the bridge with toy ASGI apps — the scope mapping, status and
 headers, streaming, a mid-stream failure, a slow client, a failed startup, and
 the client-hangs-up cancellation — so the contract is pinned without a network
@@ -17,7 +17,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import nn_gateway  # noqa: E402
+from app import gateway_bridge as nn_gateway  # noqa: E402
 
 FAILED = []
 

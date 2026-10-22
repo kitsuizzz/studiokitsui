@@ -1,0 +1,431 @@
+/* ─── A work and its wall label, plus the reasoning/study disclosure. ── */
+/* ---------- Work: label + piece ---------- */
+
+.work {
+  display: grid;
+  grid-template-columns: minmax(0, var(--measure)) var(--label-w);
+  column-gap: var(--gap);
+  padding: 44px 0;
+  animation: settle 0.22s ease-out both;
+}
+
+.label {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  order: 2;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--label);
+}
+
+.label-no {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  margin-bottom: 10px;
+  font: 500 12px var(--font-mono);
+  color: var(--label-2);
+}
+
+.label-kicker {
+  margin-bottom: 2px;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--label-2);
+}
+
+.label-artist {
+  margin-bottom: 2px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.label-artist .label-medium {
+  font-weight: 400;
+  color: var(--label);
+}
+
+.label-title {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.label-title em {
+  font: 400 15px/1.5 var(--font-label);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.label-title em.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 12;
+  overflow: hidden;
+}
+
+.label-time {
+  font-size: 13px;
+  color: var(--label-2);
+}
+
+.label-more {
+  margin-left: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--label-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.label-more:hover {
+  color: var(--text);
+}
+
+.label-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.label-ref {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  background: var(--wall-2);
+}
+
+.label-ref img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.label-ref-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: var(--text);
+  color: var(--wall);
+}
+
+.label-medium {
+  margin-bottom: 2px;
+  color: var(--label);
+}
+
+.label-dims {
+  margin-bottom: 10px;
+  font: 12.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--label);
+}
+
+.piece {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  font: 400 17px/1.6 var(--font-work);
+  font-optical-sizing: auto;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
+.piece-none {
+  font-style: italic;
+  color: var(--label-2);
+}
+
+.piece-error {
+  white-space: pre-wrap;
+  font: 400 15px/1.55 var(--font-label);
+  color: var(--danger);
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--dot);
+  vertical-align: text-bottom;
+  animation: blink 1s steps(2) infinite;
+}
+
+/* The streaming reply's live status: what the model is doing right now. */
+.work-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font: 11px/1.5 var(--font-mono);
+  color: var(--label-2);
+}
+
+.work-status .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot);
+  animation: plan-pulse 1.2s ease-in-out infinite;
+}
+
+/* The last-resort screen when the app shell itself crashes (AppErrorBoundary). */
+.app-crash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 100vh;
+  padding: 32px;
+  text-align: center;
+}
+
+.app-crash h1 {
+  font: 500 26px/1.2 var(--font-work);
+  color: var(--text);
+}
+
+.app-crash p {
+  max-width: 44ch;
+  font: 400 15px/1.6 var(--font-label);
+  color: var(--label-2);
+}
+
+.app-crash pre {
+  max-width: min(72ch, 90vw);
+  overflow: auto;
+  padding: 10px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  font: 12px/1.6 var(--font-mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+
+/* Markdown inside the piece */
+
+.piece-md > :first-child {
+  margin-top: 0;
+}
+
+.piece-md > :last-child {
+  margin-bottom: 0;
+}
+
+.piece-md p {
+  margin: 0 0 0.9em;
+}
+
+.piece-md h1,
+.piece-md h2,
+.piece-md h3,
+.piece-md h4,
+.piece-md h5,
+.piece-md h6 {
+  margin: 1.4em 0 0.5em;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+}
+
+.piece-md h1 {
+  font-size: 24px;
+}
+
+.piece-md h2 {
+  font-size: 20px;
+}
+
+.piece-md h3 {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.piece-md h4,
+.piece-md h5,
+.piece-md h6 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.piece-md ul,
+.piece-md ol {
+  margin: 0 0 0.9em;
+  padding-left: 1.4em;
+}
+
+.piece-md li {
+  margin: 0.25em 0;
+}
+
+.piece-md li > p {
+  margin: 0;
+}
+
+.piece-md blockquote {
+  margin: 0 0 0.9em;
+  padding: 0 0 0 16px;
+  border-left: 1px solid var(--label-2);
+  color: var(--label);
+  font-style: italic;
+}
+
+.piece-md pre {
+  margin: 0 0 1em;
+  padding: 14px 16px;
+  background: var(--wall-2);
+  font: 13.5px/1.55 var(--font-mono);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.piece-md code,
+.piece-md pre,
+.study-body,
+.label-dims {
+  font-variant-ligatures: none;
+}
+
+.piece-md code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--wall-2);
+  padding: 0.1em 0.35em;
+}
+
+.piece-md pre code {
+  font-size: inherit;
+  background: none;
+  padding: 0;
+}
+
+.piece-md table {
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  font: 15px var(--font-label);
+}
+
+.piece-md th,
+.piece-md td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+.piece-md th {
+  font-weight: 500;
+  border-bottom-color: var(--hairline-2);
+}
+
+.piece-md hr {
+  margin: 1.5em 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.piece-md a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--label-3);
+  text-underline-offset: 3px;
+}
+
+.piece-md a:hover {
+  text-decoration-color: var(--dot);
+}
+
+.piece-md img {
+  max-width: 100%;
+  height: auto;
+}
+
+.piece-md strong {
+  font-weight: 600;
+}
+
+/* Text the stream just generated: fades in once, then the class is kept so
+   settled text can never pop back to full opacity mid-animation. */
+.piece-fresh {
+  animation: piece-fresh-in 480ms ease-out both;
+}
+
+@keyframes piece-fresh-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.piece-md input[type="checkbox"] {
+  margin: 0 0.5em 0 0;
+  accent-color: var(--text);
+}
+
+/* ---------- Study (reasoning) ---------- */
+
+.study {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--hairline);
+}
+
+.study-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--label-2);
+  transition: color 0.15s ease;
+}
+
+.study-toggle:hover,
+.study.active .study-toggle {
+  color: var(--label);
+}
+
+.study-chevron {
+  display: inline-flex;
+  transition: transform 0.2s ease;
+}
+
+.study.open .study-chevron {
+  transform: rotate(180deg);
+}
+
+.study-body {
+  padding: 4px 0 2px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--label-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.study-body.clamped {
+  max-height: 176px;
+  overflow-y: auto;
+}
+

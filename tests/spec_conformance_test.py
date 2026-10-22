@@ -18,9 +18,9 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "agent"))
+sys.path.insert(0, ROOT)
 
-import nn_engine  # noqa: E402
+from app import design as nn_engine  # noqa: E402
 
 TOL = 1e-4
 
@@ -97,7 +97,7 @@ def check_spec(spec):
         return "skip"
     model.eval()
 
-    import nn_torch as T
+    from runtime import nn_torch as T
     sd = {k: v.detach().float() for k, v in model.state_dict().items()}
     tmp = tempfile.TemporaryDirectory()
     try:

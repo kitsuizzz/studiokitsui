@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# nnstudio's offline suite: JS syntax, the UI harness, the pure GGUF->canvas
-# builder, the torch engine, HTML balance and py_compile. Pass --live to also
-# smoke the app and run a real agent against it.
+# nnstudio's offline suite: the shell build freshness, JS syntax, the UI
+# harness, the pure GGUF->canvas builder, the torch engine, HTML balance and
+# py_compile. Pass --live to also smoke the app and run a real agent against it.
 set -u
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -9,6 +9,9 @@ fail=0
 step() { printf '%-34s' "$1"; }
 ok()   { echo "ok"; }
 bad()  { echo "FAIL"; fail=1; }
+
+step "ui build freshness"
+$PY tools/build_ui.py --check >/tmp/nnstudio_ui_build.log 2>&1 && ok || { bad; tail -25 /tmp/nnstudio_ui_build.log; }
 
 step "extract the UI script"
 sed -n '/^<script>$/,/^<\/script>$/p' ui/index.html | sed '1d;$d' > /tmp/nnstudio_ui_script.js && ok || bad
@@ -18,6 +21,9 @@ node --check /tmp/nnstudio_ui_script.js >/dev/null && ok || bad
 
 step "ui harness (DOM stub)"
 node tests/ui_boot.js >/tmp/nnstudio_ui_harness.log 2>&1 && ok || { bad; tail -25 /tmp/nnstudio_ui_harness.log; }
+
+step "architecture boundaries"
+$PY tests/architecture_test.py >/tmp/nnstudio_architecture.log 2>&1 && ok || { bad; tail -20 /tmp/nnstudio_architecture.log; }
 
 step "vision templates (UI docs -> engine)"
 $PY tests/vision_templates_test.py >/tmp/nnstudio_vision_templates.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_vision_templates.log; }
@@ -47,7 +53,7 @@ step "studio account crypto (Chat's KDF)"
 node tests/studio_crypto_test.js >/tmp/nnstudio_studio_crypto.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_studio_crypto.log; }
 
 step "the session seam (bundled for Node)"
-studio/frontend/node_modules/.bin/esbuild studio/frontend/src/lib/canvasLink.ts --bundle --platform=node --format=cjs --define:import.meta.env.BASE_URL='"/chat/"' --outfile=/tmp/nnstudio_canvas_link_bundle.cjs >/tmp/nnstudio_canvas_link_build.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_canvas_link_build.log; }
+chat/frontend/node_modules/.bin/esbuild chat/frontend/src/lib/canvasLink.ts --bundle --platform=node --format=cjs --define:import.meta.env.BASE_URL='"/chat/"' --outfile=/tmp/nnstudio_canvas_link_bundle.cjs >/tmp/nnstudio_canvas_link_build.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_canvas_link_build.log; }
 
 step "the session seam (the Chat half's view of the canvas)"
 node tests/canvas_link_test.js >/tmp/nnstudio_canvas_link.log 2>&1 && ok || { bad; tail -15 /tmp/nnstudio_canvas_link.log; }
@@ -91,7 +97,7 @@ PY
 [ $? -eq 0 ] && ok || bad
 
 step "py_compile"
-$PY -m py_compile nn_engine.py nn_server.py nn_gateway.py nn_arc.py tools/reverse_job.py tools/reverse_model.py tools/quant_bench.py tools/train_job.py tools/chat_job.py tools/backend_check.py agent/nnstudio_agent.py agent/nn_torch.py agent/nn_quant.py && ok || bad
+$PY -m py_compile app/server.py app/design.py app/gateway_bridge.py app/control.py app/jobs_api.py app/models_api.py app/arc.py app/tasks.py app/jobs/reverse_job.py app/jobs/reverse_model.py app/jobs/train_job.py app/jobs/chat_job.py app/jobs/agent_job.py app/jobs/weights_job.py runner/runner.py runner/tools/quant_bench.py runner/tools/backend_check.py runtime/nn_torch.py runtime/nn_quant.py shared/nn_tokenizers.py && ok || bad
 
 if [ "${1:-}" = "--live" ]; then
   step "live app"
@@ -124,7 +130,7 @@ print((e.get("css") or [""])[0] if e else "")' 2>/dev/null)
      && [ "$CODE" = "200" ] && [ "$KCODE" = "200" ] && [ "$R" = "/chat" ]; then
     ok
   else
-    bad; echo "    shell=$(printf '%s' "$C" | grep -c 'id="nn-chat"') entry=${A:-none}/$CODE css=${K:-none}/$KCODE old-index=${R:-none} (a build without VITE_BASE_PATH=chat, a missing manifest, or the standalone page still reachable — see studio/README.md)"
+    bad; echo "    shell=$(printf '%s' "$C" | grep -c 'id="nn-chat"') entry=${A:-none}/$CODE css=${K:-none}/$KCODE old-index=${R:-none} (a build without VITE_BASE_PATH=chat, a missing manifest, or the standalone page still reachable — see chat/README.md)"
   fi
 
   step "live landing (the door and /studio)"
@@ -144,7 +150,7 @@ print((e.get("css") or [""])[0] if e else "")' 2>/dev/null)
   node tests/live_account_test.js >/tmp/nnstudio_live_account.log 2>&1 && ok || { bad; tail -12 /tmp/nnstudio_live_account.log; }
 
   step "live gateway suite (needs MariaDB)"
-  if (cd studio/backend && ../../.venv/bin/python -m pytest -q >/tmp/nnstudio_gateway_suite.log 2>&1); then
+  if (cd chat/backend && ../../.venv/bin/python -m pytest -q >/tmp/nnstudio_gateway_suite.log 2>&1); then
     ok
   elif grep -q "MariaDB is not reachable" /tmp/nnstudio_gateway_suite.log; then
     echo "ok  (MariaDB is down — the suite is skipped)"

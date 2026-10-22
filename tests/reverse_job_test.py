@@ -15,10 +15,10 @@ import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import nn_arc  # noqa: E402
+from app import arc as nn_arc  # noqa: E402
 
 PY = sys.executable
-JOB = os.path.join(ROOT, "tools", "reverse_job.py")
+JOB = os.path.join(ROOT, "app", "jobs", "reverse_job.py")
 
 # The stub agent that stands in for opencode: it exits at once. `true` is
 # not in /bin on every platform (macOS keeps it in /usr/bin) — this python
@@ -36,7 +36,7 @@ repo = os.environ.get("STUB_REPO")
 if repo:
     def rep(*args):
         subprocess.run([sys.executable,
-                        os.path.join(os.environ["STUB_ROOT"], "tools", "reverse_model.py"),
+                        os.path.join(os.environ["STUB_ROOT"], "app", "jobs", "reverse_model.py"),
                         "report", repo] + list(args), check=False,
                        stdout=subprocess.DEVNULL)
     rep("models", "stubmodel")
@@ -48,7 +48,7 @@ ev(type="step_start", sessionID="ses_stub", part={"type": "step"})
 ev(type="tool_use", sessionID="ses_stub",
    part={"type": "tool", "tool": "shell",
          "state": {"status": "completed",
-                   "input": {"command": "cd %s && python tools/reverse_model.py check llama"}}})
+                   "input": {"command": "cd %s && python app/jobs/reverse_model.py check llama"}}})
 ev(type="text", sessionID="ses_stub",
    part={"type": "text", "text": "the gate reads clean, writing the spec"})
 time.sleep(0.1)
@@ -302,7 +302,7 @@ with tempfile.TemporaryDirectory() as d:
     with open(audit_file, encoding="utf-8") as f:
         report = json.load(f)
     assert report["ok"] and report["issues"] == [] and report["repo"] == repo, report
-    p = subprocess.run([PY, os.path.join(ROOT, "tools", "reverse_model.py"),
+    p = subprocess.run([PY, os.path.join(ROOT, "app", "jobs", "reverse_model.py"),
                         "audit", repo], cwd=ROOT, capture_output=True, text=True)
     assert p.returncode == 0 and "every box is wired" in p.stdout, \
         (p.returncode, p.stdout, p.stderr)
@@ -314,7 +314,7 @@ with tempfile.TemporaryDirectory() as d2:
     db = os.path.join(d2, "hf_arc.db")
     tdb = os.path.join(d2, "tasks.db")
     sys.path.insert(0, ROOT)
-    import nn_tasks  # noqa: E402
+    from app import tasks as nn_tasks  # noqa: E402
     os.environ["NNSTUDIO_ARC_DB"] = db
     os.environ["NNSTUDIO_TASKS_DB"] = tdb
     task = nn_tasks.create("reverse", {"repo": "llama"})

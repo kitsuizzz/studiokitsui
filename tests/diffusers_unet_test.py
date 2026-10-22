@@ -17,14 +17,14 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-sys.path.insert(0, os.path.join(ROOT, "agent"))
+sys.path.insert(0, ROOT)
 os.environ.setdefault("NNSTUDIO_ARC_DB",
                       os.path.join(tempfile.mkdtemp(prefix="nnstudio-arc-"), "hf_arc.db"))
 
 import torch                                                    # noqa: E402
 
-import nn_engine                                                # noqa: E402
-import nn_torch as T                                            # noqa: E402
+from app import design as nn_engine                                                # noqa: E402
+from runtime import nn_torch as T                                            # noqa: E402
 
 SIDE = 8
 CTX_LEN = 5

@@ -1,0 +1,39 @@
+/* ─── Salon tokens. The one place the SPA's palette and type live. ───── */
+/* ============================================================
+   chat.kitsui — "Salon"
+   The conversation as an exhibition. Every exchange is a work
+   on a wall; the prompt is its wall label. Gallery white, ink,
+   graphite for studies, and a single red dot. No bubbles, no
+   sidebar, no floating input box.
+   ============================================================ */
+
+:root {
+  --wall: #fafaf7;
+  --wall-2: #f1f1ed;
+  --wall-3: #e8e8e3;
+  --text: #161616;
+  --label: #4a4a47;
+  --label-2: #8a8a86;
+  --label-3: #b5b5b0;
+  --hairline: #e3e3de;
+  --hairline-2: #cfcfc9;
+  --dot: #e5321b;
+  --dot-soft: rgba(229, 50, 27, 0.16);
+  --ok: #3f7a3a;
+  --danger: #c8321c;
+
+  --topbar-h: 40px;
+  --head-h: 48px;
+  --label-w: 300px;
+  --rail-w: 56px;
+  --gap: 56px;
+  --measure: 68ch;
+  --wall-pad: clamp(24px, 6vw, 96px);
+  /* Input box size: a function of the window only, never of its container. */
+  --composer-w: clamp(280px, calc(100vw - 320px), 1000px);
+
+  --font-label: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-work: "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+

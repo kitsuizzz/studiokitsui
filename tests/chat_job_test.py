@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 PY = sys.executable
-JOB = os.path.join(ROOT, "tools", "chat_job.py")
+JOB = os.path.join(ROOT, "app", "jobs", "chat_job.py")
 
 STUB = r'''
 import json, os, sys
@@ -31,7 +31,7 @@ print(json.dumps({"part": {"id": "p1", "type": "text", "text": "reading "}}), fl
 print(json.dumps({"part": {"id": "p1", "type": "text", "delta": "the repo"}}), flush=True)
 print(json.dumps({"part": {"id": "c1", "type": "tool",
                            "tool": "read",
-                           "state": {"input": {"path": "nn_engine.py"}}}}), flush=True)
+                           "state": {"input": {"path": "app/design.py"}}}}), flush=True)
 sys.exit(0)
 '''
 
@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory() as d:
         f.write(STUB)
     os.environ["NNSTUDIO_TASKS_DB"] = os.path.join(d, "tasks.db")
     os.environ["NNSTUDIO_ARC_DB"] = os.path.join(d, "hf_arc.db")
-    import nn_tasks  # noqa: E402  (after the dbs are pointed away)
+    from app import tasks as nn_tasks  # noqa: E402  (after the dbs are pointed away)
 
     def run_turn(task, message, session="", repo=""):
         e = dict(os.environ)
