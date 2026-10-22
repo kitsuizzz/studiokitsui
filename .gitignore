@@ -4,6 +4,7 @@
 .env
 .env.*
 !.env.example
+.runner_tokens.json
 .opencode/
 *.key
 *.pem
@@ -58,12 +59,12 @@ users.db*
 *.sqlite
 *.sqlite3
 
-# the Chat half's build (studio/README.md: VITE_BASE_PATH=chat npm run build)
-studio/frontend/dist/
-studio/frontend/node_modules/
-studio/frontend/tsconfig.tsbuildinfo
-studio/backend/.venv/
-studio/backend/__pycache__/
+# the Chat half's build/deps (chat/README.md: VITE_BASE_PATH=chat npm run build)
+chat/frontend/dist/
+chat/frontend/node_modules/
+chat/frontend/tsconfig.tsbuildinfo
+chat/backend/.venv/
+chat/backend/__pycache__/
 
 # the logo's font cache (brand/tools/make_brand.py fetches them once)
 brand/tools/cache/
